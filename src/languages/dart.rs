@@ -14,7 +14,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                     items.push(Extractable::Function(sig));
                 }
             }
-            "class_definition" => {
+            "class_declaration" | "class_definition" => {
                 if let Some(t) = extract_named(source, child, TypeKind::Class) {
                     items.push(Extractable::Type(t));
                 }
@@ -24,6 +24,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 if let Some(t) = extract_named(source, child, TypeKind::Trait) {
                     items.push(Extractable::Type(t));
                 }
+                extract_class_members(source, child, &mut items);
             }
             "enum_declaration" => {
                 if let Some(t) = extract_named(source, child, TypeKind::Enum) {
@@ -74,12 +75,36 @@ fn extract_class_members(source: &str, class_node: Node, items: &mut Vec<Extract
         if child.kind() == "class_body" {
             let mut bc = child.walk();
             for member in child.children(&mut bc) {
-                if member.kind() == "method_signature" || member.kind() == "function_signature" {
-                    if let Some(sig) = extract_function(source, member) {
-                        items.push(Extractable::Function(sig));
+                match member.kind() {
+                    "method_signature" | "function_signature" => {
+                        if let Some(sig) = extract_function(source, member) {
+                            items.push(Extractable::Function(sig));
+                        }
                     }
+                    "constructor_signature" => {
+                        if let Some(sig) = extract_constructor(source, member) {
+                            items.push(Extractable::Function(sig));
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
     }
+}
+
+fn extract_constructor(source: &str, node: Node) -> Option<FunctionSignature> {
+    let name_node = child_by_kind(node, "identifier")?;
+    let name = node_text(name_node, source).to_string();
+
+    let params = child_by_kind(node, "formal_parameter_list")
+        .map(|p| node_text(p, source).to_string())
+        .unwrap_or_else(|| "()".to_string());
+
+    Some(FunctionSignature {
+        name,
+        params,
+        return_type: None,
+        line: node.start_position().row as u32 + 1,
+    })
 }

@@ -7,7 +7,9 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
     let mut cursor = root.walk();
 
     for child in root.children(&mut cursor) {
-        if child.kind() == "assignment"
+        // R grammar uses "binary_operator" for <- assignments
+        if child.kind() == "binary_operator"
+            || child.kind() == "assignment"
             || child.kind() == "left_assignment"
             || child.kind() == "equals_assignment"
         {
@@ -15,7 +17,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
             let mut ac = child.walk();
             for c in child.children(&mut ac) {
                 if c.kind() == "function_definition" {
-                    // Get the name from the left side of assignment
+                    // Get the name from the left side of assignment (first child)
                     let name = child.child(0).and_then(|n| {
                         if n.kind() == "identifier" {
                             Some(node_text(n, source).to_string())

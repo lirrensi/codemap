@@ -32,19 +32,36 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
 }
 
 fn extract_value(source: &str, node: Node) -> Option<FunctionSignature> {
-    let name_node = child_by_kind(node, "value_name")?;
+    // value_definition > let_binding > value_name
+    let binding = child_by_kind(node, "let_binding")?;
+    let name_node = child_by_kind(binding, "value_name")?;
     let name = node_text(name_node, source).to_string();
+
+    // Extract params from parameter children of let_binding
+    let params: Vec<&str> = binding
+        .children(&mut binding.walk())
+        .filter(|c| c.kind() == "parameter")
+        .map(|p| node_text(p, source))
+        .collect();
+
+    let params_str = if params.is_empty() {
+        "()".to_string()
+    } else {
+        format!("({})", params.join(", "))
+    };
 
     Some(FunctionSignature {
         name,
-        params: "()".to_string(),
+        params: params_str,
         return_type: None,
         line: node.start_position().row as u32 + 1,
     })
 }
 
 fn extract_type_def(source: &str, node: Node) -> Option<NamedType> {
-    let name_node = child_by_kind(node, "type_constructor")?;
+    // type_definition > type_binding > type_constructor
+    let binding = child_by_kind(node, "type_binding")?;
+    let name_node = child_by_kind(binding, "type_constructor")?;
     let name = node_text(name_node, source).to_string();
     Some(NamedType {
         name,

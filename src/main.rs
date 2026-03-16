@@ -1,11 +1,7 @@
 mod cli;
-mod languages;
-mod parser;
-mod renderer;
-mod types;
-mod walker;
 
 use clap::Parser;
+use codemap::{parser, renderer, types, walker};
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::fs;

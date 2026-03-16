@@ -24,6 +24,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 if let Some(t) = extract_module(source, child) {
                     items.push(Extractable::Type(t));
                 }
+                extract_class_methods(source, child, &mut items);
             }
             "singleton_method" => {
                 if let Some(sig) = extract_singleton_method(source, child) {
@@ -92,10 +93,36 @@ fn extract_singleton_method(source: &str, node: Node) -> Option<FunctionSignatur
 fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extractable>) {
     let mut cursor = class_node.walk();
     for child in class_node.children(&mut cursor) {
-        if child.kind() == "method" {
-            if let Some(sig) = extract_method(source, child) {
-                items.push(Extractable::Function(sig));
+        match child.kind() {
+            "method" | "singleton_method" => {
+                if let Some(sig) = extract_method(source, child) {
+                    items.push(Extractable::Function(sig));
+                }
             }
+            "body_statement" => {
+                // Methods are nested inside body_statement
+                extract_body_methods(source, child, items);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn extract_body_methods(source: &str, body_node: Node, items: &mut Vec<Extractable>) {
+    let mut cursor = body_node.walk();
+    for child in body_node.children(&mut cursor) {
+        match child.kind() {
+            "method" => {
+                if let Some(sig) = extract_method(source, child) {
+                    items.push(Extractable::Function(sig));
+                }
+            }
+            "singleton_method" => {
+                if let Some(sig) = extract_singleton_method(source, child) {
+                    items.push(Extractable::Function(sig));
+                }
+            }
+            _ => {}
         }
     }
 }

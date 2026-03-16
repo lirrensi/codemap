@@ -15,9 +15,8 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "class_declaration" => {
-                if let Some(t) = extract_named(source, child, TypeKind::Class) {
-                    items.push(Extractable::Type(t));
-                }
+                // Kotlin uses class_declaration for class, data class, enum class, interface
+                extract_class_declaration(source, child, &mut items);
             }
             "object_declaration" => {
                 if let Some(t) = extract_named(source, child, TypeKind::Struct) {
@@ -46,8 +45,68 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
     items
 }
 
+fn extract_class_declaration(source: &str, node: Node, items: &mut Vec<Extractable>) {
+    let mut cursor = node.walk();
+    let mut kind = TypeKind::Class;
+    let mut has_interface = false;
+    let mut has_enum = false;
+
+    for child in node.children(&mut cursor) {
+        match child.kind() {
+            "modifiers" => {
+                // Check for data modifier
+                let mut mc = child.walk();
+                for m in child.children(&mut mc) {
+                    if m.kind() == "class_modifier" {
+                        let mut cc = m.walk();
+                        for c in m.children(&mut cc) {
+                            if node_text(c, source) == "enum" {
+                                has_enum = true;
+                            }
+                        }
+                    }
+                }
+            }
+            "interface" => {
+                has_interface = true;
+            }
+            "enum" => {
+                has_enum = true;
+            }
+            "identifier" | "simple_identifier" => {
+                let name = node_text(child, source).to_string();
+                if has_interface {
+                    kind = TypeKind::Interface;
+                } else if has_enum {
+                    kind = TypeKind::Enum;
+                }
+                items.push(Extractable::Type(NamedType {
+                    name,
+                    kind: kind.clone(),
+                }));
+            }
+            "class_body" => {
+                extract_class_body(source, child, items);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn extract_class_body(source: &str, body_node: Node, items: &mut Vec<Extractable>) {
+    let mut cursor = body_node.walk();
+    for child in body_node.children(&mut cursor) {
+        if child.kind() == "function_declaration" {
+            if let Some(sig) = extract_function(source, child) {
+                items.push(Extractable::Function(sig));
+            }
+        }
+    }
+}
+
 fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
-    let name_node = child_by_kind(node, "simple_identifier")?;
+    let name_node =
+        child_by_kind(node, "simple_identifier").or_else(|| child_by_kind(node, "identifier"))?;
     let name = node_text(name_node, source).to_string();
 
     let params_node = child_by_kind(node, "function_value_parameters")?;
@@ -67,7 +126,8 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
 }
 
 fn extract_named(source: &str, node: Node, kind: TypeKind) -> Option<NamedType> {
-    let name_node = child_by_kind(node, "simple_identifier")?;
+    let name_node =
+        child_by_kind(node, "simple_identifier").or_else(|| child_by_kind(node, "identifier"))?;
     let name = node_text(name_node, source).to_string();
     Some(NamedType { name, kind })
 }

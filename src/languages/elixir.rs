@@ -14,6 +14,8 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 if let Some(extractable) = extract_call(source, child) {
                     items.push(extractable);
                 }
+                // Also extract functions from inside defmodule do_blocks
+                extract_module_functions(source, child, &mut items);
             }
             _ => {}
         }
@@ -63,5 +65,22 @@ fn extract_call(source: &str, node: Node) -> Option<Extractable> {
             None
         }
         _ => None,
+    }
+}
+
+/// Extract functions from inside a defmodule's do_block
+pub fn extract_module_functions(source: &str, node: Node, items: &mut Vec<Extractable>) {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "do_block" {
+            let mut dc = child.walk();
+            for block_child in child.children(&mut dc) {
+                if block_child.kind() == "call" {
+                    if let Some(extractable) = extract_call(source, block_child) {
+                        items.push(extractable);
+                    }
+                }
+            }
+        }
     }
 }
