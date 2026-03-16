@@ -80,12 +80,8 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
     let name = node_text(name_node, source).to_string();
 
     let params_node = child_by_kind(node, "formal_parameters")?;
-    let params_text = node_text(params_node, source);
-    let params = if name == "constructor" {
-        params_text.to_string()
-    } else {
-        format!("(self{})", &params_text[1..]) // replace ( with (self,
-    };
+    let params = node_text(params_node, source).to_string();
+    // JS methods use implicit `this`, not explicit self param - keep params as-is
 
     Some(FunctionSignature {
         name,

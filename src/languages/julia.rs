@@ -33,11 +33,9 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 if let Some(t) = extract_module(source, child) {
                     items.push(Extractable::Type(t));
                 }
-                // Also extract functions defined inside the module
                 extract_module_functions(source, child, &mut items);
             }
             "assignment" => {
-                // Short function: name(params) = expr
                 if let Some(sig) = extract_assignment_function(source, child) {
                     items.push(Extractable::Function(sig));
                 }
@@ -50,36 +48,98 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
 }
 
 fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
-    // function_definition > signature > [call_expression >] identifier + argument_list
+    // function_definition > signature > typed_expression
+    // typed_expression contains: call_expression (name + params) :: return_type
     let sig_node = child_by_kind(node, "signature")?;
+    extract_from_signature(source, sig_node, node)
+}
 
-    // Name might be directly under signature, or inside a call_expression
-    let name = if let Some(call) = child_by_kind(sig_node, "call_expression") {
+fn extract_from_signature(source: &str, sig_node: Node, parent: Node) -> Option<FunctionSignature> {
+    // Look for typed_expression which has call_expression + :: + return_type
+    if let Some(typed) = child_by_kind(sig_node, "typed_expression") {
+        return extract_from_typed_expression(source, typed, parent);
+    }
+
+    // Fallback: direct call_expression or identifier (no type annotation)
+    let (name, params) = if let Some(call) = child_by_kind(sig_node, "call_expression") {
         let name_node = child_by_kind(call, "identifier")?;
-        node_text(name_node, source).to_string()
+        let name = node_text(name_node, source).to_string();
+        let params = child_by_kind(call, "argument_list")
+            .map(|p| node_text(p, source).to_string())
+            .unwrap_or_else(|| "()".to_string());
+        (name, params)
     } else {
         let name_node = child_by_kind(sig_node, "identifier")?;
-        node_text(name_node, source).to_string()
+        let name = node_text(name_node, source).to_string();
+        (name, "()".to_string())
     };
 
-    // Params are in argument_list (not parameter_list)
-    let params = child_by_kind(sig_node, "argument_list")
-        .or_else(|| {
-            child_by_kind(sig_node, "call_expression")
-                .and_then(|c| child_by_kind(c, "argument_list"))
-        })
+    Some(FunctionSignature {
+        name,
+        params,
+        return_type: None,
+        line: parent.start_position().row as u32 + 1,
+    })
+}
+
+fn extract_from_typed_expression(
+    source: &str,
+    typed: Node,
+    parent: Node,
+) -> Option<FunctionSignature> {
+    // typed_expression structure:
+    //   call_expression (name + params)
+    //   ::
+    //   identifier (return type)
+    let call = child_by_kind(typed, "call_expression")?;
+    let name_node = child_by_kind(call, "identifier")?;
+    let name = node_text(name_node, source).to_string();
+    let params = child_by_kind(call, "argument_list")
         .map(|p| node_text(p, source).to_string())
         .unwrap_or_else(|| "()".to_string());
 
-    let return_type = sig_node
-        .children(&mut sig_node.walk())
-        .find(|c| c.kind() == "return_type")
-        .map(|t| {
-            node_text(t, source)
-                .trim_start_matches("::")
-                .trim()
-                .to_string()
-        });
+    // Return type is the node after "::" token
+    let return_type = extract_julia_return_type(source, typed);
+
+    Some(FunctionSignature {
+        name,
+        params,
+        return_type,
+        line: parent.start_position().row as u32 + 1,
+    })
+}
+
+/// Extract return type from typed_expression: find `::` then grab next sibling
+fn extract_julia_return_type(source: &str, typed: Node) -> Option<String> {
+    let mut cursor = typed.walk();
+    let children: Vec<Node> = typed.children(&mut cursor).collect();
+
+    for i in 0..children.len() {
+        if children[i].kind() == "::" {
+            if i + 1 < children.len() {
+                let type_node = children[i + 1];
+                // Could be identifier, parametrized_type_expression, etc.
+                return Some(node_text(type_node, source).to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_short_function(source: &str, node: Node) -> Option<FunctionSignature> {
+    let name_node = child_by_kind(node, "identifier")?;
+    let name = node_text(name_node, source).to_string();
+
+    let params_node = child_by_kind(node, "parameter_list")?;
+    let params = node_text(params_node, source).to_string();
+
+    // Check for return_type child
+    let return_type = child_by_kind(node, "return_type").map(|t| {
+        node_text(t, source)
+            .trim_start_matches("::")
+            .trim()
+            .to_string()
+    });
 
     Some(FunctionSignature {
         name,
@@ -89,45 +149,34 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
     })
 }
 
-fn extract_short_function(source: &str, node: Node) -> Option<FunctionSignature> {
-    // short_function_definition has identifier and parameter_list as direct children
-    let name_node = child_by_kind(node, "identifier")?;
-    let name = node_text(name_node, source).to_string();
-
-    let params_node = child_by_kind(node, "parameter_list")?;
-    let params = node_text(params_node, source).to_string();
-
-    Some(FunctionSignature {
-        name,
-        params,
-        return_type: None,
-        line: node.start_position().row as u32 + 1,
-    })
-}
-
-/// Extract short function from assignment node: name(params) = expr
+/// Extract short function from assignment: name(params)::Type = expr
 fn extract_assignment_function(source: &str, node: Node) -> Option<FunctionSignature> {
-    // assignment > call_expression (left side) = expression (right side)
     let left = node.child(0)?;
+
+    // Case 1: typed_expression wrapping a call_expression
+    // typed_expression > call_expression (name + params) :: return_type
+    if left.kind() == "typed_expression" {
+        return extract_from_typed_expression(source, left, node);
+    }
+
+    // Case 2: plain call_expression (no return type)
     if left.kind() == "call_expression" {
         let name_node = child_by_kind(left, "identifier")?;
         let name = node_text(name_node, source).to_string();
         let params = child_by_kind(left, "argument_list")
             .map(|p| node_text(p, source).to_string())
             .unwrap_or_else(|| "()".to_string());
-        Some(FunctionSignature {
+        return Some(FunctionSignature {
             name,
             params,
             return_type: None,
             line: node.start_position().row as u32 + 1,
-        })
-    } else {
-        None
+        });
     }
+    None
 }
 
 fn extract_struct(source: &str, node: Node) -> Option<NamedType> {
-    // struct_definition > type_head > identifier
     let head = child_by_kind(node, "type_head")?;
     let name_node = child_by_kind(head, "identifier")?;
     let name = node_text(name_node, source).to_string();
@@ -138,7 +187,6 @@ fn extract_struct(source: &str, node: Node) -> Option<NamedType> {
 }
 
 fn extract_abstract(source: &str, node: Node) -> Option<NamedType> {
-    // abstract_definition > type_head > identifier
     let head = child_by_kind(node, "type_head")?;
     let name_node = child_by_kind(head, "identifier")?;
     let name = node_text(name_node, source).to_string();
@@ -168,6 +216,11 @@ fn extract_module_functions(source: &str, module_node: Node, items: &mut Vec<Ext
             }
             "short_function_definition" => {
                 if let Some(sig) = extract_short_function(source, child) {
+                    items.push(Extractable::Function(sig));
+                }
+            }
+            "assignment" => {
+                if let Some(sig) = extract_assignment_function(source, child) {
                     items.push(Extractable::Function(sig));
                 }
             }

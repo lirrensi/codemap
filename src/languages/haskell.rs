@@ -1,36 +1,98 @@
 use super::{child_by_kind, node_text};
 use crate::types::{Extractable, FunctionSignature, NamedType, TypeKind};
+use std::collections::HashMap;
 use tree_sitter::Node;
 
 pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
     let mut items = Vec::new();
     let root = tree.root_node();
 
+    // First pass: collect all type signatures (for return type lookup)
+    // In Haskell, signatures are siblings of function implementations:
+    //   add :: Int -> Int -> Int   <- signature node
+    //   add x y = x + y           <- function node
+    let signatures = collect_signatures(source, root);
+
     // Root is "haskell" with children "header" and "declarations"
     // Actual declarations live inside the "declarations" node
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
         if child.kind() == "declarations" {
-            extract_declarations(source, child, &mut items);
+            extract_declarations(source, child, &mut items, &signatures);
         } else {
-            extract_declaration_node(source, child, &mut items);
+            extract_declaration_node(source, child, &mut items, &signatures);
         }
     }
 
     items
 }
 
-fn extract_declarations(source: &str, node: tree_sitter::Node, items: &mut Vec<Extractable>) {
+/// Collect all signature nodes and map function name -> return type
+fn collect_signatures(source: &str, root: Node) -> HashMap<String, String> {
+    let mut sigs = HashMap::new();
+    let mut cursor = root.walk();
+
+    for child in root.children(&mut cursor) {
+        if child.kind() == "declarations" {
+            let mut dc = child.walk();
+            for decl in child.children(&mut dc) {
+                if decl.kind() == "signature" {
+                    if let Some((name, ret_type)) = extract_signature_info(source, decl) {
+                        sigs.insert(name, ret_type);
+                    }
+                }
+            }
+        } else if child.kind() == "signature" {
+            if let Some((name, ret_type)) = extract_signature_info(source, child) {
+                sigs.insert(name, ret_type);
+            }
+        }
+    }
+    sigs
+}
+
+/// Extract name and return type from a signature node.
+/// A signature looks like: `add :: Int -> Int -> Int`
+/// The return type is the LAST type in the `->` chain.
+fn extract_signature_info(source: &str, node: Node) -> Option<(String, String)> {
+    let name_node = child_by_kind(node, "variable")?;
+    let name = node_text(name_node, source).to_string();
+
+    // The type is in a "function" child node
+    let type_node = child_by_kind(node, "function")?;
+    let full_type = node_text(type_node, source).to_string();
+
+    // The return type is the last part after the last "->"
+    let return_type = full_type
+        .rsplit("->")
+        .next()
+        .map(|s| s.trim().to_string())
+        .unwrap_or(full_type);
+
+    Some((name, return_type))
+}
+
+fn extract_declarations(
+    source: &str,
+    node: tree_sitter::Node,
+    items: &mut Vec<Extractable>,
+    signatures: &HashMap<String, String>,
+) {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        extract_declaration_node(source, child, items);
+        extract_declaration_node(source, child, items, signatures);
     }
 }
 
-fn extract_declaration_node(source: &str, node: tree_sitter::Node, items: &mut Vec<Extractable>) {
+fn extract_declaration_node(
+    source: &str,
+    node: tree_sitter::Node,
+    items: &mut Vec<Extractable>,
+    signatures: &HashMap<String, String>,
+) {
     match node.kind() {
         "function" => {
-            if let Some(sig) = extract_function(source, node) {
+            if let Some(sig) = extract_function(source, node, signatures) {
                 items.push(Extractable::Function(sig));
             }
         }
@@ -58,7 +120,11 @@ fn extract_declaration_node(source: &str, node: tree_sitter::Node, items: &mut V
     }
 }
 
-fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
+fn extract_function(
+    source: &str,
+    node: Node,
+    signatures: &HashMap<String, String>,
+) -> Option<FunctionSignature> {
     let name_node = child_by_kind(node, "variable")?;
     let name = node_text(name_node, source).to_string();
 
@@ -70,10 +136,13 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         })
         .unwrap_or_else(|| "()".to_string());
 
+    // Look up return type from signatures collected earlier
+    let return_type = signatures.get(&name).cloned();
+
     Some(FunctionSignature {
         name,
         params,
-        return_type: None,
+        return_type,
         line: node.start_position().row as u32 + 1,
     })
 }

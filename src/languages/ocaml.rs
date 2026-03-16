@@ -50,12 +50,54 @@ fn extract_value(source: &str, node: Node) -> Option<FunctionSignature> {
         format!("({})", params.join(", "))
     };
 
+    // Extract return type from the `: type` annotation after params
+    let return_type = extract_return_type(source, binding);
+
     Some(FunctionSignature {
         name,
         params: params_str,
-        return_type: None,
+        return_type,
         line: node.start_position().row as u32 + 1,
     })
+}
+
+/// Extract return type from let_binding.
+/// In OCaml, the return type annotation appears after the params as `: type`.
+/// The AST structure is: ... parameter parameter : type_constructor_path =
+fn extract_return_type(source: &str, binding: Node) -> Option<String> {
+    let mut cursor = binding.walk();
+    let children: Vec<Node> = binding.children(&mut cursor).collect();
+
+    // Find the ":" token
+    for i in 0..children.len() {
+        if children[i].kind() == ":" {
+            // The return type is the next sibling after ":"
+            if i + 1 < children.len() {
+                let type_node = children[i + 1];
+                // Make sure it's a type node, not "=" or something else
+                if is_type_node(type_node.kind()) {
+                    return Some(node_text(type_node, source).to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn is_type_node(kind: &str) -> bool {
+    matches!(
+        kind,
+        "type_constructor_path"
+            | "type_constructor"
+            | "type_variable"
+            | "polymorphic_variant_type"
+            | "function_type"
+            | "tuple_type"
+            | "package_type"
+            | "object_type"
+            | "class_type"
+            | "constructor_path"
+    )
 }
 
 fn extract_type_def(source: &str, node: Node) -> Option<NamedType> {

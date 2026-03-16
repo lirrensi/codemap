@@ -1,0 +1,2 @@
+[env]
+CC = { value = "C:\\ProgramData\\mingw64\\mingw64\\bin\\gcc.exe", force = true }

@@ -28,6 +28,8 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 if let Some(t) = extract_named_type(source, child, TypeKind::Trait) {
                     items.push(Extractable::Type(t));
                 }
+                // Also extract trait method signatures
+                extract_trait_methods(source, child, &mut items);
             }
             "type_item" => {
                 if let Some(t) = extract_named_type(source, child, TypeKind::TypeAlias) {
@@ -51,11 +53,9 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
     let params_node = child_by_kind(node, "parameters")?;
     let params = node_text(params_node, source).to_string();
 
-    let return_type = child_by_kind(node, "return_type").map(|rt| {
-        let text = node_text(rt, source);
-        // Strip the leading "->"
-        text.trim_start_matches("->").trim().to_string()
-    });
+    // Return type is NOT a single child node - it's a "->" token followed by a type node.
+    // Walk siblings after "parameters" to find "->" then grab the next type node.
+    let return_type = extract_return_type(source, node);
 
     Some(FunctionSignature {
         name,
@@ -63,6 +63,43 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         return_type,
         line: node.start_position().row as u32 + 1,
     })
+}
+
+fn extract_return_type(source: &str, node: Node) -> Option<String> {
+    let mut cursor = node.walk();
+    let children: Vec<Node> = node.children(&mut cursor).collect();
+
+    // Find the "->" token
+    for i in 0..children.len() {
+        if children[i].kind() == "->" {
+            // The return type is the next sibling (skip over "->")
+            if i + 1 < children.len() {
+                let type_node = children[i + 1];
+                // Make sure it's actually a type node, not something else
+                if is_type_node(type_node.kind()) {
+                    return Some(node_text(type_node, source).to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn is_type_node(kind: &str) -> bool {
+    matches!(
+        kind,
+        "type_identifier"
+            | "primitive_type"
+            | "generic_type"
+            | "reference_type"
+            | "tuple_type"
+            | "array_type"
+            | "unit_type"
+            | "function_type"
+            | "macro_invocation"  // for things like Result<...>
+            | "scoped_type_identifier"
+            | "never_type"
+    )
 }
 
 fn extract_named_type(source: &str, node: Node, kind: TypeKind) -> Option<NamedType> {
@@ -79,11 +116,8 @@ fn extract_impl(source: &str, node: Node, items: &mut Vec<Extractable>) {
             let mut method_cursor = child.walk();
             for method_child in child.children(&mut method_cursor) {
                 if method_child.kind() == "function_item" {
-                    if let Some(mut sig) = extract_function(source, method_child) {
-                        // Prefix with `self` hint for methods
-                        if has_self_param(source, method_child) {
-                            sig.params = insert_self(&sig.params);
-                        }
+                    if let Some(sig) = extract_function(source, method_child) {
+                        // Keep params as-is from tree-sitter (self/&self is already there)
                         items.push(Extractable::Function(sig));
                     }
                 }
@@ -92,21 +126,19 @@ fn extract_impl(source: &str, node: Node, items: &mut Vec<Extractable>) {
     }
 }
 
-fn has_self_param(source: &str, node: Node) -> bool {
-    if let Some(params) = child_by_kind(node, "parameters") {
-        let text = node_text(params, source);
-        return text.contains("self");
-    }
-    false
-}
-
-fn insert_self(params: &str) -> String {
-    // If params is "()", make it "(self)"
-    // If params is "(x: i32)", make it "(self, x: i32)"
-    let inner = params.trim_matches(|c| c == '(' || c == ')');
-    if inner.trim().is_empty() {
-        "(self)".to_string()
-    } else {
-        format!("(self, {})", inner.trim())
+fn extract_trait_methods(source: &str, node: Node, items: &mut Vec<Extractable>) {
+    // Extract method signatures from trait declarations
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "declaration_list" {
+            let mut method_cursor = child.walk();
+            for method_child in child.children(&mut method_cursor) {
+                if method_child.kind() == "function_signature_item" {
+                    if let Some(sig) = extract_function(source, method_child) {
+                        items.push(Extractable::Function(sig));
+                    }
+                }
+            }
+        }
     }
 }

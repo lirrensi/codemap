@@ -66,32 +66,12 @@ fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extract
             let mut block_cursor = child.walk();
             for stmt in child.children(&mut block_cursor) {
                 if stmt.kind() == "function_definition" {
-                    if let Some(mut sig) = extract_function(source, stmt) {
-                        // Check if it's a method (has self/cls param)
-                        if has_self_or_cls(source, stmt) {
-                            sig.params = insert_self(&sig.params);
-                        }
+                    if let Some(sig) = extract_function(source, stmt) {
+                        // Keep params as-is (self/cls is already there from tree-sitter)
                         items.push(Extractable::Function(sig));
                     }
                 }
             }
         }
-    }
-}
-
-fn has_self_or_cls(source: &str, node: Node) -> bool {
-    if let Some(params) = child_by_kind(node, "parameters") {
-        let text = node_text(params, source);
-        return text.contains("self") || text.contains("cls");
-    }
-    false
-}
-
-fn insert_self(params: &str) -> String {
-    let inner = params.trim_matches(|c| c == '(' || c == ')');
-    if inner.trim().is_empty() {
-        "(self)".to_string()
-    } else {
-        format!("(self, {})", inner.trim())
     }
 }
