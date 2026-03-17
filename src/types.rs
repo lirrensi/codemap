@@ -14,6 +14,7 @@ pub struct FunctionSignature {
     pub params: String,
     pub return_type: Option<String>,
     pub line: u32, // 1-based
+    pub parent_type: Option<String>,
 }
 
 /// A named type (struct, enum, trait, class, interface, etc.)

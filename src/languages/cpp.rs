@@ -70,6 +70,7 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -99,6 +100,7 @@ fn extract_function_declaration(source: &str, node: Node) -> Option<FunctionSign
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 

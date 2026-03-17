@@ -50,6 +50,7 @@ fn extract_class_declaration(source: &str, node: Node, items: &mut Vec<Extractab
     let mut kind = TypeKind::Class;
     let mut has_interface = false;
     let mut has_enum = false;
+    let mut parent_type_name: Option<String> = None;
 
     for child in node.children(&mut cursor) {
         match child.kind() {
@@ -81,23 +82,30 @@ fn extract_class_declaration(source: &str, node: Node, items: &mut Vec<Extractab
                     kind = TypeKind::Enum;
                 }
                 items.push(Extractable::Type(NamedType {
-                    name,
+                    name: name.clone(),
                     kind: kind.clone(),
                 }));
+                parent_type_name = Some(name.clone());
             }
             "class_body" => {
-                extract_class_body(source, child, items);
+                extract_class_body(source, child, items, parent_type_name.clone());
             }
             _ => {}
         }
     }
 }
 
-fn extract_class_body(source: &str, body_node: Node, items: &mut Vec<Extractable>) {
+fn extract_class_body(
+    source: &str,
+    body_node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type_name: Option<String>,
+) {
     let mut cursor = body_node.walk();
     for child in body_node.children(&mut cursor) {
         if child.kind() == "function_declaration" {
-            if let Some(sig) = extract_function(source, child) {
+            if let Some(mut sig) = extract_function(source, child) {
+                sig.parent_type = parent_type_name.clone();
                 items.push(Extractable::Function(sig));
             }
         }
@@ -122,6 +130,7 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 

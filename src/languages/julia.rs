@@ -79,6 +79,7 @@ fn extract_from_signature(source: &str, sig_node: Node, parent: Node) -> Option<
         params,
         return_type: None,
         line: parent.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -106,6 +107,7 @@ fn extract_from_typed_expression(
         params,
         return_type,
         line: parent.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -146,6 +148,7 @@ fn extract_short_function(source: &str, node: Node) -> Option<FunctionSignature>
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -171,6 +174,7 @@ fn extract_assignment_function(source: &str, node: Node) -> Option<FunctionSigna
             params,
             return_type: None,
             line: node.start_position().row as u32 + 1,
+            parent_type: None,
         });
     }
     None

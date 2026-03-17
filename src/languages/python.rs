@@ -15,10 +15,10 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "class_definition" => {
-                if let Some(t) = extract_class(source, child) {
+                if let Some((t, class_name)) = extract_class(source, child) {
                     items.push(Extractable::Type(t));
                     // Also extract methods from the class body
-                    extract_class_methods(source, child, &mut items);
+                    extract_class_methods(source, child, &mut items, &class_name);
                 }
             }
             _ => {}
@@ -46,19 +46,28 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
-fn extract_class(source: &str, node: Node) -> Option<NamedType> {
+fn extract_class(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Class,
+        },
         name,
-        kind: TypeKind::Class,
-    })
+    ))
 }
 
-fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extractable>) {
+fn extract_class_methods(
+    source: &str,
+    class_node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: &str,
+) {
     // Find the block (class body)
     let mut cursor = class_node.walk();
     for child in class_node.children(&mut cursor) {
@@ -68,7 +77,10 @@ fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extract
                 if stmt.kind() == "function_definition" {
                     if let Some(sig) = extract_function(source, stmt) {
                         // Keep params as-is (self/cls is already there from tree-sitter)
-                        items.push(Extractable::Function(sig));
+                        items.push(Extractable::Function(FunctionSignature {
+                            parent_type: Some(parent_type.to_string()),
+                            ..sig
+                        }));
                     }
                 }
             }

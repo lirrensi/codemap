@@ -126,6 +126,7 @@ fn extract_call(source: &str, node: Node, specs: &HashMap<String, String>) -> Op
                         params,
                         return_type,
                         line: node.start_position().row as u32 + 1,
+                        parent_type: None,
                     }));
                 }
             }

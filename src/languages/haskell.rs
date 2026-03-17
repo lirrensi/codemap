@@ -144,6 +144,7 @@ fn extract_function(
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 

@@ -36,6 +36,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                             params,
                             return_type: None,
                             line: child.start_position().row as u32 + 1,
+                            parent_type: None,
                         }));
                     }
                 }

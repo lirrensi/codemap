@@ -53,24 +53,43 @@ fn main() {
     }
 
     // 5. Render
-    let output = renderer::render(&root, &file_map);
+    let (l1_output, l2_output) = renderer::render(&root, &file_map);
 
     // 6. Write or print
     if cli.stdout {
-        print!("{}", output);
+        print!("{}", l1_output); // Print L1 to stdout by default
     } else {
+        // Write L1 file
         if let Some(parent) = cli.output.parent() {
             fs::create_dir_all(parent).ok();
         }
-        fs::write(&cli.output, &output).unwrap_or_else(|e| {
-            eprintln!("Error writing to {}: {}", cli.output.display(), e);
+        let l1_path = cli.output.with_file_name(format!(
+            "{}.L1{}",
+            cli.output.file_stem().unwrap_or_default().to_string_lossy(),
+            cli.output.extension().unwrap_or_default().to_string_lossy()
+        ));
+        fs::write(&l1_path, &l1_output).unwrap_or_else(|e| {
+            eprintln!("Error writing to {}: {}", l1_path.display(), e);
             std::process::exit(1);
         });
+
+        // Write L2 file
+        let l2_path = cli.output.with_file_name(format!(
+            "{}.L2{}",
+            cli.output.file_stem().unwrap_or_default().to_string_lossy(),
+            cli.output.extension().unwrap_or_default().to_string_lossy()
+        ));
+        fs::write(&l2_path, &l2_output).unwrap_or_else(|e| {
+            eprintln!("Error writing to {}: {}", l2_path.display(), e);
+            std::process::exit(1);
+        });
+
         let file_count = file_map.len();
         let item_count: usize = file_map.values().map(|v| v.len()).sum();
         eprintln!(
-            "Wrote {} ({} files, {} items) in {:.0}ms",
-            cli.output.display(),
+            "Wrote {} and {} ({} files, {} items) in {:.0}ms",
+            l1_path.display(),
+            l2_path.display(),
             file_count,
             item_count,
             start.elapsed().as_secs_f64() * 1000.0

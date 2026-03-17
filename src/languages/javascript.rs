@@ -15,9 +15,9 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "class_declaration" => {
-                if let Some(t) = extract_class(source, child) {
+                if let Some((t, class_name)) = extract_class(source, child) {
                     items.push(Extractable::Type(t));
-                    extract_class_methods(source, child, &mut items);
+                    extract_class_methods(source, child, &mut items, &class_name);
                 }
             }
             "lexical_declaration" | "variable_declaration" => {
@@ -47,19 +47,28 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type: None,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
-fn extract_class(source: &str, node: Node) -> Option<NamedType> {
+fn extract_class(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Class,
+        },
         name,
-        kind: TypeKind::Class,
-    })
+    ))
 }
 
-fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extractable>) {
+fn extract_class_methods(
+    source: &str,
+    class_node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: &str,
+) {
     let mut cursor = class_node.walk();
     for child in class_node.children(&mut cursor) {
         if child.kind() == "class_body" {
@@ -67,7 +76,10 @@ fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extract
             for member in child.children(&mut body_cursor) {
                 if member.kind() == "method_definition" {
                     if let Some(sig) = extract_method(source, member) {
-                        items.push(Extractable::Function(sig));
+                        items.push(Extractable::Function(FunctionSignature {
+                            parent_type: Some(parent_type.to_string()),
+                            ..sig
+                        }));
                     }
                 }
             }
@@ -88,6 +100,7 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type: None,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -110,6 +123,7 @@ fn extract_arrow_or_function_var(source: &str, node: Node, items: &mut Vec<Extra
                             params,
                             return_type: None,
                             line: node.start_position().row as u32 + 1,
+                            parent_type: None,
                         }));
                         return;
                     }
@@ -123,6 +137,7 @@ fn extract_arrow_or_function_var(source: &str, node: Node, items: &mut Vec<Extra
                             params,
                             return_type: None,
                             line: node.start_position().row as u32 + 1,
+                            parent_type: None,
                         }));
                         return;
                     }
@@ -153,6 +168,7 @@ fn extract_export_function(source: &str, node: Node, items: &mut Vec<Extractable
                             params,
                             return_type: None,
                             line: node.start_position().row as u32 + 1,
+                            parent_type: None,
                         }));
                     }
                 }

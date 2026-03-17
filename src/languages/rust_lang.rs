@@ -10,34 +10,39 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
     for child in root.children(&mut cursor) {
         match child.kind() {
             "function_item" => {
-                if let Some(sig) = extract_function(source, child) {
+                if let Some(mut sig) = extract_function(source, child) {
+                    sig.parent_type = None;
                     items.push(Extractable::Function(sig));
                 }
             }
             "struct_item" => {
-                if let Some(t) = extract_named_type(source, child, TypeKind::Struct) {
+                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::Struct) {
                     items.push(Extractable::Type(t));
                 }
             }
             "enum_item" => {
-                if let Some(t) = extract_named_type(source, child, TypeKind::Enum) {
+                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::Enum) {
                     items.push(Extractable::Type(t));
                 }
             }
             "trait_item" => {
-                if let Some(t) = extract_named_type(source, child, TypeKind::Trait) {
+                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::Trait) {
                     items.push(Extractable::Type(t));
+                    // Also extract trait method signatures
+                    extract_trait_methods(source, child, &mut items, &type_name);
                 }
-                // Also extract trait method signatures
-                extract_trait_methods(source, child, &mut items);
             }
             "type_item" => {
-                if let Some(t) = extract_named_type(source, child, TypeKind::TypeAlias) {
+                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::TypeAlias)
+                {
                     items.push(Extractable::Type(t));
                 }
             }
             "impl_item" => {
-                extract_impl(source, child, &mut items);
+                // For impl blocks, we don't have a specific type name from the impl itself
+                // The type being implemented is in the impl's type specification
+                // For now, we'll pass None since we don't extract the implemented type name here
+                extract_impl(source, child, &mut items, None);
             }
             _ => {}
         }
@@ -62,6 +67,7 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -102,13 +108,24 @@ fn is_type_node(kind: &str) -> bool {
     )
 }
 
-fn extract_named_type(source: &str, node: Node, kind: TypeKind) -> Option<NamedType> {
+fn extract_named_type(source: &str, node: Node, kind: TypeKind) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "type_identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType { name, kind })
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind,
+        },
+        name,
+    ))
 }
 
-fn extract_impl(source: &str, node: Node, items: &mut Vec<Extractable>) {
+fn extract_impl(
+    source: &str,
+    node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: Option<String>,
+) {
     // Extract methods from impl blocks
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -118,7 +135,10 @@ fn extract_impl(source: &str, node: Node, items: &mut Vec<Extractable>) {
                 if method_child.kind() == "function_item" {
                     if let Some(sig) = extract_function(source, method_child) {
                         // Keep params as-is from tree-sitter (self/&self is already there)
-                        items.push(Extractable::Function(sig));
+                        items.push(Extractable::Function(FunctionSignature {
+                            parent_type: parent_type.clone(),
+                            ..sig
+                        }));
                     }
                 }
             }
@@ -126,7 +146,12 @@ fn extract_impl(source: &str, node: Node, items: &mut Vec<Extractable>) {
     }
 }
 
-fn extract_trait_methods(source: &str, node: Node, items: &mut Vec<Extractable>) {
+fn extract_trait_methods(
+    source: &str,
+    node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: &str,
+) {
     // Extract method signatures from trait declarations
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -135,7 +160,10 @@ fn extract_trait_methods(source: &str, node: Node, items: &mut Vec<Extractable>)
             for method_child in child.children(&mut method_cursor) {
                 if method_child.kind() == "function_signature_item" {
                     if let Some(sig) = extract_function(source, method_child) {
-                        items.push(Extractable::Function(sig));
+                        items.push(Extractable::Function(FunctionSignature {
+                            parent_type: Some(parent_type.to_string()),
+                            ..sig
+                        }));
                     }
                 }
             }

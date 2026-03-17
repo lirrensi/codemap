@@ -15,24 +15,29 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "class_declaration" => {
-                if let Some(t) = extract_class(source, child) {
+                if let Some((t, class_name)) = extract_class(source, child) {
                     items.push(Extractable::Type(t));
-                    extract_class_methods(source, child, &mut items);
+                    extract_class_methods(source, child, &mut items, &class_name);
                 }
             }
             "interface_declaration" => {
-                if let Some(t) = extract_interface(source, child) {
+                if let Some((t, interface_name)) = extract_interface(source, child) {
                     items.push(Extractable::Type(t));
+                    // Interfaces can have methods too
+                    extract_class_methods(source, child, &mut items, &interface_name);
                 }
             }
             "type_alias_declaration" => {
-                if let Some(t) = extract_type_alias(source, child) {
+                if let Some((t, type_name)) = extract_type_alias(source, child) {
                     items.push(Extractable::Type(t));
+                    // Type aliases don't typically have methods, but we'll keep the pattern consistent
                 }
             }
             "enum_declaration" => {
-                if let Some(t) = extract_enum(source, child) {
+                if let Some((t, enum_name)) = extract_enum(source, child) {
                     items.push(Extractable::Type(t));
+                    // Enums can have methods too in TypeScript
+                    extract_class_methods(source, child, &mut items, &enum_name);
                 }
             }
             "lexical_declaration" | "variable_declaration" => {
@@ -67,46 +72,64 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
-fn extract_class(source: &str, node: Node) -> Option<NamedType> {
+fn extract_class(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "type_identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Class,
+        },
         name,
-        kind: TypeKind::Class,
-    })
+    ))
 }
 
-fn extract_interface(source: &str, node: Node) -> Option<NamedType> {
+fn extract_interface(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "type_identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Interface,
+        },
         name,
-        kind: TypeKind::Interface,
-    })
+    ))
 }
 
-fn extract_type_alias(source: &str, node: Node) -> Option<NamedType> {
+fn extract_type_alias(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "type_identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::TypeAlias,
+        },
         name,
-        kind: TypeKind::TypeAlias,
-    })
+    ))
 }
 
-fn extract_enum(source: &str, node: Node) -> Option<NamedType> {
+fn extract_enum(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Enum,
+        },
         name,
-        kind: TypeKind::Enum,
-    })
+    ))
 }
 
-fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extractable>) {
+fn extract_class_methods(
+    source: &str,
+    class_node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: &str,
+) {
     let mut cursor = class_node.walk();
     for child in class_node.children(&mut cursor) {
         if child.kind() == "class_body" {
@@ -114,7 +137,10 @@ fn extract_class_methods(source: &str, class_node: Node, items: &mut Vec<Extract
             for member in child.children(&mut body_cursor) {
                 if member.kind() == "method_definition" {
                     if let Some(sig) = extract_method(source, member) {
-                        items.push(Extractable::Function(sig));
+                        items.push(Extractable::Function(FunctionSignature {
+                            parent_type: Some(parent_type.to_string()),
+                            ..sig
+                        }));
                     }
                 }
             }
@@ -145,6 +171,7 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -175,6 +202,7 @@ fn extract_arrow_or_function_var(source: &str, node: Node, items: &mut Vec<Extra
                             params,
                             return_type,
                             line: node.start_position().row as u32 + 1,
+                            parent_type: None,
                         }));
                         return;
                     }

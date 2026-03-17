@@ -9,17 +9,21 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
 
     for child in root.children(&mut cursor) {
         if child.kind() == "class_declaration" {
-            if let Some(t) = extract_class(source, child) {
+            if let Some((t, class_name)) = extract_class(source, child) {
                 items.push(Extractable::Type(t));
+                extract_class_body(source, child, &mut items, &class_name);
             }
-            extract_class_body(source, child, &mut items);
         } else if child.kind() == "interface_declaration" {
-            if let Some(t) = extract_interface(source, child) {
+            if let Some((t, interface_name)) = extract_interface(source, child) {
                 items.push(Extractable::Type(t));
+                // Interfaces can have methods too in Java 8+
+                extract_class_body(source, child, &mut items, &interface_name);
             }
         } else if child.kind() == "enum_declaration" {
-            if let Some(t) = extract_enum(source, child) {
+            if let Some((t, enum_name)) = extract_enum(source, child) {
                 items.push(Extractable::Type(t));
+                // Enums can have methods too
+                extract_class_body(source, child, &mut items, &enum_name);
             }
         }
     }
@@ -27,34 +31,48 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
     items
 }
 
-fn extract_class(source: &str, node: Node) -> Option<NamedType> {
+fn extract_class(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Class,
+        },
         name,
-        kind: TypeKind::Class,
-    })
+    ))
 }
 
-fn extract_interface(source: &str, node: Node) -> Option<NamedType> {
+fn extract_interface(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Interface,
+        },
         name,
-        kind: TypeKind::Interface,
-    })
+    ))
 }
 
-fn extract_enum(source: &str, node: Node) -> Option<NamedType> {
+fn extract_enum(source: &str, node: Node) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType {
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind: TypeKind::Enum,
+        },
         name,
-        kind: TypeKind::Enum,
-    })
+    ))
 }
 
-fn extract_class_body(source: &str, class_node: Node, items: &mut Vec<Extractable>) {
+fn extract_class_body(
+    source: &str,
+    class_node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: &str,
+) {
     let mut cursor = class_node.walk();
     for child in class_node.children(&mut cursor) {
         if child.kind() == "class_body" {
@@ -64,7 +82,10 @@ fn extract_class_body(source: &str, class_node: Node, items: &mut Vec<Extractabl
                     || member.kind() == "constructor_declaration"
                 {
                     if let Some(sig) = extract_method(source, member) {
-                        items.push(Extractable::Function(sig));
+                        items.push(Extractable::Function(FunctionSignature {
+                            parent_type: Some(parent_type.to_string()),
+                            ..sig
+                        }));
                     }
                 }
             }
@@ -99,5 +120,6 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }

@@ -47,6 +47,7 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
@@ -54,8 +55,25 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
     let name_node = child_by_kind(node, "field_identifier")?;
     let name = node_text(name_node, source).to_string();
 
-    // Get receiver
-    let receiver = child_by_kind(node, "parameter_list").map(|p| node_text(p, source).to_string());
+    // Get receiver (first parameter list)
+    let receiver_node = child_by_kind(node, "parameter_list");
+    let receiver_text = receiver_node.map(|p| node_text(p, source).to_string());
+
+    // Extract type name from receiver like "(t *MyType)" -> "*MyType" or "(t MyType)" -> "MyType"
+    let parent_type = receiver_text.clone().and_then(|text| {
+        // Remove parentheses and split by space to get type
+        let inner = text.trim_start_matches('(').trim_end_matches(')');
+        let parts: Vec<&str> = inner.split_whitespace().collect();
+        // Skip the parameter name (first part), take the type (second part)
+        if parts.len() >= 2 {
+            Some(parts[1].to_string())
+        } else if !parts.is_empty() {
+            // Handle case like "(MyType)" where there's no parameter name
+            Some(parts[0].to_string())
+        } else {
+            None
+        }
+    });
 
     let params_node = node
         .children(&mut node.walk())
@@ -73,7 +91,7 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
         .map(|rt| node_text(rt, source).to_string());
 
     // Prepend receiver to params
-    let full_params = match receiver {
+    let full_params = match receiver_text {
         Some(r) => format!("{}{}", r, params),
         None => params,
     };
@@ -83,6 +101,7 @@ fn extract_method(source: &str, node: Node) -> Option<FunctionSignature> {
         params: full_params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type,
     })
 }
 

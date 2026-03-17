@@ -114,17 +114,18 @@ fn test_renderer_output_format() {
             params: "(a: i32, b: i32)".into(),
             return_type: Some("i32".into()),
             line: 10,
+            parent_type: None,
         }),
     ];
     files.insert(PathBuf::from("/root/src/main.rs"), items);
 
-    let output = renderer::render(Path::new("/root"), &files);
+    let (l1_output, l2_output) = renderer::render(Path::new("/root"), &files);
 
-    assert!(output.contains("# CODEMAP"));
-    assert!(output.contains("_generated:"));
-    assert!(output.contains("## src/main.rs"));
-    assert!(output.contains("`Config` (struct)"));
-    assert!(output.contains("`add(a: i32, b: i32) -> i32` :10"));
+    assert!(l2_output.contains("# CODEMAP"));
+    assert!(l2_output.contains("_generated:"));
+    assert!(l2_output.contains("## src/main.rs"));
+    assert!(l2_output.contains("`Config` (struct)"));
+    assert!(l2_output.contains("`add(a: i32, b: i32) -> i32` :10"));
 }
 
 #[test]
@@ -138,12 +139,13 @@ fn test_renderer_skips_empty_files() {
             params: "()".into(),
             return_type: None,
             line: 1,
+            parent_type: None,
         })],
     );
 
-    let output = renderer::render(Path::new("/root"), &files);
-    assert!(output.contains("## main.rs"));
-    assert!(!output.contains("empty.rs"));
+    let (_, l2_output) = renderer::render(Path::new("/root"), &files);
+    assert!(l2_output.contains("## main.rs"));
+    assert!(!l2_output.contains("empty.rs"));
 }
 
 // ---------------------------------------------------------------------------
@@ -610,7 +612,7 @@ fn e2e_renderer_all_fixtures() {
 
     assert!(!files.is_empty(), "should have parsed at least one fixture");
 
-    let output = renderer::render(fixtures_dir, &files);
+    let (_, output) = renderer::render(fixtures_dir, &files);
     assert!(output.contains("# CODEMAP"), "should have header");
     assert!(output.contains("_generated:"), "should have timestamp");
 

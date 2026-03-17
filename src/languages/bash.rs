@@ -27,5 +27,6 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params: "()".to_string(), // Bash functions don't have typed params
         return_type: None,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }

@@ -58,6 +58,7 @@ fn extract_value(source: &str, node: Node) -> Option<FunctionSignature> {
         params: params_str,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 

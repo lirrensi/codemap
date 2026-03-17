@@ -15,25 +15,28 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "class_declaration" | "class_definition" => {
-                if let Some(t) = extract_named(source, child, TypeKind::Class) {
+                if let Some((t, type_name)) = extract_named(source, child, TypeKind::Class) {
                     items.push(Extractable::Type(t));
+                    extract_class_members(source, child, &mut items, &type_name);
                 }
-                extract_class_members(source, child, &mut items);
             }
             "mixin_declaration" => {
-                if let Some(t) = extract_named(source, child, TypeKind::Trait) {
+                if let Some((t, type_name)) = extract_named(source, child, TypeKind::Trait) {
                     items.push(Extractable::Type(t));
+                    extract_class_members(source, child, &mut items, &type_name);
                 }
-                extract_class_members(source, child, &mut items);
             }
             "enum_declaration" => {
-                if let Some(t) = extract_named(source, child, TypeKind::Enum) {
+                if let Some((t, type_name)) = extract_named(source, child, TypeKind::Enum) {
                     items.push(Extractable::Type(t));
+                    // Enums can have methods too in Dart
+                    extract_class_members(source, child, &mut items, &type_name);
                 }
             }
             "type_alias" => {
-                if let Some(t) = extract_named(source, child, TypeKind::TypeAlias) {
+                if let Some((t, type_name)) = extract_named(source, child, TypeKind::TypeAlias) {
                     items.push(Extractable::Type(t));
+                    // Type aliases don't typically have methods, but we'll keep the pattern consistent
                 }
             }
             _ => {}
@@ -60,16 +63,28 @@ fn extract_function(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type,
         line: node.start_position().row as u32 + 1,
+        parent_type: None,
     })
 }
 
-fn extract_named(source: &str, node: Node, kind: TypeKind) -> Option<NamedType> {
+fn extract_named(source: &str, node: Node, kind: TypeKind) -> Option<(NamedType, String)> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
-    Some(NamedType { name, kind })
+    Some((
+        NamedType {
+            name: name.clone(),
+            kind,
+        },
+        name,
+    ))
 }
 
-fn extract_class_members(source: &str, class_node: Node, items: &mut Vec<Extractable>) {
+fn extract_class_members(
+    source: &str,
+    class_node: Node,
+    items: &mut Vec<Extractable>,
+    parent_type: &str,
+) {
     let mut cursor = class_node.walk();
     for child in class_node.children(&mut cursor) {
         if child.kind() == "class_body" {
@@ -78,11 +93,14 @@ fn extract_class_members(source: &str, class_node: Node, items: &mut Vec<Extract
                 match member.kind() {
                     "method_signature" | "function_signature" => {
                         if let Some(sig) = extract_function(source, member) {
-                            items.push(Extractable::Function(sig));
+                            items.push(Extractable::Function(FunctionSignature {
+                                parent_type: Some(parent_type.to_string()),
+                                ..sig
+                            }));
                         }
                     }
                     "constructor_signature" => {
-                        if let Some(sig) = extract_constructor(source, member) {
+                        if let Some(sig) = extract_constructor(source, member, parent_type) {
                             items.push(Extractable::Function(sig));
                         }
                     }
@@ -93,7 +111,7 @@ fn extract_class_members(source: &str, class_node: Node, items: &mut Vec<Extract
     }
 }
 
-fn extract_constructor(source: &str, node: Node) -> Option<FunctionSignature> {
+fn extract_constructor(source: &str, node: Node, parent_type: &str) -> Option<FunctionSignature> {
     let name_node = child_by_kind(node, "identifier")?;
     let name = node_text(name_node, source).to_string();
 
@@ -106,5 +124,6 @@ fn extract_constructor(source: &str, node: Node) -> Option<FunctionSignature> {
         params,
         return_type: None,
         line: node.start_position().row as u32 + 1,
+        parent_type: Some(parent_type.to_string()),
     })
 }
