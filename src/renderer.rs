@@ -4,7 +4,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 /// Render the CODEMAP.md from a map of file paths to their extracted items.
-pub fn render(root: &Path, files: &BTreeMap<PathBuf, Vec<Extractable>>) -> (String, String) {
+pub fn render(
+    root: &Path,
+    files: &BTreeMap<PathBuf, Vec<Extractable>>,
+    tree: &str,
+) -> (String, String) {
     let mut l1_output = String::new(); // Level 1: names only with nesting
     let mut l2_output = String::new(); // Level 2: full signatures
 
@@ -14,6 +18,15 @@ pub fn render(root: &Path, files: &BTreeMap<PathBuf, Vec<Extractable>>) -> (Stri
     let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
     l1_output.push_str(&format!("_generated: {}_\n\n", timestamp));
     l2_output.push_str(&format!("_generated: {}_\n\n", timestamp));
+
+    // File tree section
+    l1_output.push_str("## File Tree\n\n");
+    l1_output.push_str(tree);
+    l1_output.push('\n');
+
+    l2_output.push_str("## File Tree\n\n");
+    l2_output.push_str(tree);
+    l2_output.push('\n');
 
     for (path, items) in files {
         if items.is_empty() {

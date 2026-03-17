@@ -1,7 +1,8 @@
 mod cli;
 
 use clap::Parser;
-use codemap::{parser, renderer, types, walker};
+use cli::Commands;
+use codemap::{parser, renderer, setup, tree, types, walker};
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::fs;
@@ -10,11 +11,29 @@ use std::time::Instant;
 
 fn main() {
     let cli = cli::Cli::parse();
+
+    // Dispatch subcommand
+    if let Some(ref _cmd) = cli.command {
+        match _cmd {
+            Commands::Setup => {
+                std::process::exit(setup::run_setup());
+            }
+        }
+    }
+
+    // Default: scan mode (existing behavior)
+    run_scan(&cli);
+}
+
+fn run_scan(cli: &cli::Cli) {
     let start = Instant::now();
 
     // 1. Discover files
     let root = fs::canonicalize(&cli.path).unwrap_or_else(|_| cli.path.clone());
     let files = walker::discover_files(&root, &cli.exclude);
+
+    // Build file tree from all discovered files (before language filtering)
+    let tree_output = tree::build_tree(&files, &root, cli.tree_depth);
 
     // 2. Filter by language if specified
     let files: Vec<PathBuf> = if let Some(ref langs) = cli.languages {
@@ -53,11 +72,11 @@ fn main() {
     }
 
     // 5. Render
-    let (l1_output, l2_output) = renderer::render(&root, &file_map);
+    let (l1_output, l2_output) = renderer::render(&root, &file_map, &tree_output);
 
     // 6. Write or print
     if cli.stdout {
-        print!("{}", l1_output); // Print L1 to stdout by default
+        print!("{}", l1_output);
     } else {
         // Write L1 file
         if let Some(parent) = cli.output.parent() {

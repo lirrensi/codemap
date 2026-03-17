@@ -119,9 +119,7 @@ fn test_renderer_output_format() {
     ];
     files.insert(PathBuf::from("/root/src/main.rs"), items);
 
-    let (l1_output, l2_output) = renderer::render(Path::new("/root"), &files);
-
-    assert!(l2_output.contains("# CODEMAP"));
+    let (l1_output, l2_output) = renderer::render(Path::new("/root"), &files, "");
     assert!(l2_output.contains("_generated:"));
     assert!(l2_output.contains("## src/main.rs"));
     assert!(l2_output.contains("`Config` (struct)"));
@@ -143,7 +141,7 @@ fn test_renderer_skips_empty_files() {
         })],
     );
 
-    let (_, l2_output) = renderer::render(Path::new("/root"), &files);
+    let (_, l2_output) = renderer::render(Path::new("/root"), &files, "");
     assert!(l2_output.contains("## main.rs"));
     assert!(!l2_output.contains("empty.rs"));
 }
@@ -612,7 +610,7 @@ fn e2e_renderer_all_fixtures() {
 
     assert!(!files.is_empty(), "should have parsed at least one fixture");
 
-    let (_, output) = renderer::render(fixtures_dir, &files);
+    let (_, output) = renderer::render(fixtures_dir, &files, "");
     assert!(output.contains("# CODEMAP"), "should have header");
     assert!(output.contains("_generated:"), "should have timestamp");
 
