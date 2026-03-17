@@ -127,10 +127,10 @@ fn extract_enum(source: &str, node: Node) -> Option<NamedType> {
 fn extract_namespace(source: &str, node: Node, items: &mut Vec<Extractable>) {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if child.kind() == "function_definition" {
-            if let Some(sig) = extract_function(source, child) {
-                items.push(Extractable::Function(sig));
-            }
+        if child.kind() == "function_definition"
+            && let Some(sig) = extract_function(source, child)
+        {
+            items.push(Extractable::Function(sig));
         }
     }
 }

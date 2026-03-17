@@ -117,12 +117,10 @@ fn extract_julia_return_type(source: &str, typed: Node) -> Option<String> {
     let children: Vec<Node> = typed.children(&mut cursor).collect();
 
     for i in 0..children.len() {
-        if children[i].kind() == "::" {
-            if i + 1 < children.len() {
-                let type_node = children[i + 1];
-                // Could be identifier, parametrized_type_expression, etc.
-                return Some(node_text(type_node, source).to_string());
-            }
+        if children[i].kind() == "::" && i + 1 < children.len() {
+            let type_node = children[i + 1];
+            // Could be identifier, parametrized_type_expression, etc.
+            return Some(node_text(type_node, source).to_string());
         }
     }
     None

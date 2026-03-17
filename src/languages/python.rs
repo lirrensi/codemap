@@ -74,14 +74,14 @@ fn extract_class_methods(
         if child.kind() == "block" {
             let mut block_cursor = child.walk();
             for stmt in child.children(&mut block_cursor) {
-                if stmt.kind() == "function_definition" {
-                    if let Some(sig) = extract_function(source, stmt) {
-                        // Keep params as-is (self/cls is already there from tree-sitter)
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: Some(parent_type.to_string()),
-                            ..sig
-                        }));
-                    }
+                if stmt.kind() == "function_definition"
+                    && let Some(sig) = extract_function(source, stmt)
+                {
+                    // Keep params as-is (self/cls is already there from tree-sitter)
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: Some(parent_type.to_string()),
+                        ..sig
+                    }));
                 }
             }
         }

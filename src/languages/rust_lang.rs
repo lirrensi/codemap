@@ -16,12 +16,12 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "struct_item" => {
-                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::Struct) {
+                if let Some((t, _type_name)) = extract_named_type(source, child, TypeKind::Struct) {
                     items.push(Extractable::Type(t));
                 }
             }
             "enum_item" => {
-                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::Enum) {
+                if let Some((t, _type_name)) = extract_named_type(source, child, TypeKind::Enum) {
                     items.push(Extractable::Type(t));
                 }
             }
@@ -33,7 +33,8 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "type_item" => {
-                if let Some((t, type_name)) = extract_named_type(source, child, TypeKind::TypeAlias)
+                if let Some((t, _type_name)) =
+                    extract_named_type(source, child, TypeKind::TypeAlias)
                 {
                     items.push(Extractable::Type(t));
                 }
@@ -132,14 +133,14 @@ fn extract_impl(
         if child.kind() == "declaration_list" {
             let mut method_cursor = child.walk();
             for method_child in child.children(&mut method_cursor) {
-                if method_child.kind() == "function_item" {
-                    if let Some(sig) = extract_function(source, method_child) {
-                        // Keep params as-is from tree-sitter (self/&self is already there)
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: parent_type.clone(),
-                            ..sig
-                        }));
-                    }
+                if method_child.kind() == "function_item"
+                    && let Some(sig) = extract_function(source, method_child)
+                {
+                    // Keep params as-is from tree-sitter (self/&self is already there)
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: parent_type.clone(),
+                        ..sig
+                    }));
                 }
             }
         }
@@ -158,13 +159,13 @@ fn extract_trait_methods(
         if child.kind() == "declaration_list" {
             let mut method_cursor = child.walk();
             for method_child in child.children(&mut method_cursor) {
-                if method_child.kind() == "function_signature_item" {
-                    if let Some(sig) = extract_function(source, method_child) {
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: Some(parent_type.to_string()),
-                            ..sig
-                        }));
-                    }
+                if method_child.kind() == "function_signature_item"
+                    && let Some(sig) = extract_function(source, method_child)
+                {
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: Some(parent_type.to_string()),
+                        ..sig
+                    }));
                 }
             }
         }

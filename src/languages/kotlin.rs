@@ -103,11 +103,11 @@ fn extract_class_body(
 ) {
     let mut cursor = body_node.walk();
     for child in body_node.children(&mut cursor) {
-        if child.kind() == "function_declaration" {
-            if let Some(mut sig) = extract_function(source, child) {
-                sig.parent_type = parent_type_name.clone();
-                items.push(Extractable::Function(sig));
-            }
+        if child.kind() == "function_declaration"
+            && let Some(mut sig) = extract_function(source, child)
+        {
+            sig.parent_type = parent_type_name.clone();
+            items.push(Extractable::Function(sig));
         }
     }
 }

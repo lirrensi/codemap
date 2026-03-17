@@ -12,14 +12,11 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
-        match child.kind() {
-            "call" => {
-                if let Some(extractable) = extract_call(source, child, &specs) {
-                    items.push(extractable);
-                }
-                extract_module_functions(source, child, &mut items, &specs);
+        if child.kind() == "call" {
+            if let Some(extractable) = extract_call(source, child, &specs) {
+                items.push(extractable);
             }
-            _ => {}
+            extract_module_functions(source, child, &mut items, &specs);
         }
     }
 
@@ -161,10 +158,10 @@ fn extract_module_functions(
         if child.kind() == "do_block" {
             let mut dc = child.walk();
             for block_child in child.children(&mut dc) {
-                if block_child.kind() == "call" {
-                    if let Some(extractable) = extract_call(source, block_child, specs) {
-                        items.push(extractable);
-                    }
+                if block_child.kind() == "call"
+                    && let Some(extractable) = extract_call(source, block_child, specs)
+                {
+                    items.push(extractable);
                 }
             }
         }

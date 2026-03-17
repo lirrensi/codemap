@@ -19,12 +19,12 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 // Interfaces can have methods too in Java 8+
                 extract_class_body(source, child, &mut items, &interface_name);
             }
-        } else if child.kind() == "enum_declaration" {
-            if let Some((t, enum_name)) = extract_enum(source, child) {
-                items.push(Extractable::Type(t));
-                // Enums can have methods too
-                extract_class_body(source, child, &mut items, &enum_name);
-            }
+        } else if child.kind() == "enum_declaration"
+            && let Some((t, enum_name)) = extract_enum(source, child)
+        {
+            items.push(Extractable::Type(t));
+            // Enums can have methods too
+            extract_class_body(source, child, &mut items, &enum_name);
         }
     }
 
@@ -78,15 +78,14 @@ fn extract_class_body(
         if child.kind() == "class_body" {
             let mut body_cursor = child.walk();
             for member in child.children(&mut body_cursor) {
-                if member.kind() == "method_declaration"
-                    || member.kind() == "constructor_declaration"
+                if (member.kind() == "method_declaration"
+                    || member.kind() == "constructor_declaration")
+                    && let Some(sig) = extract_method(source, member)
                 {
-                    if let Some(sig) = extract_method(source, member) {
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: Some(parent_type.to_string()),
-                            ..sig
-                        }));
-                    }
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: Some(parent_type.to_string()),
+                        ..sig
+                    }));
                 }
             }
         }

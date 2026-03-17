@@ -32,12 +32,8 @@ pub fn node_text<'a>(node: Node, source: &'a str) -> &'a str {
 /// Helper: find a child node by kind.
 pub fn child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if child.kind() == kind {
-            return Some(child);
-        }
-    }
-    None
+    node.children(&mut cursor)
+        .find(|child| child.kind() == kind)
 }
 
 /// Helper: find all children of a specific kind.

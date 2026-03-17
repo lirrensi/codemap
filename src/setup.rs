@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const PRE_COMMIT_REPO: &str = "https://github.com/yourorg/codemap";
 
@@ -35,7 +35,7 @@ fn find_repo_root() -> Option<PathBuf> {
     }
 }
 
-fn setup_gitignore(repo_root: &PathBuf) -> bool {
+fn setup_gitignore(repo_root: &Path) -> bool {
     let gitignore_path = repo_root.join(".gitignore");
 
     if gitignore_path.exists() {

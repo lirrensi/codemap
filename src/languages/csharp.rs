@@ -66,15 +66,14 @@ fn extract_members(source: &str, parent: Node, items: &mut Vec<Extractable>, par
         if child.kind() == "declaration_list" {
             let mut dc = child.walk();
             for member in child.children(&mut dc) {
-                if member.kind() == "method_declaration"
-                    || member.kind() == "constructor_declaration"
+                if (member.kind() == "method_declaration"
+                    || member.kind() == "constructor_declaration")
+                    && let Some(sig) = extract_method(source, member)
                 {
-                    if let Some(sig) = extract_method(source, member) {
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: Some(parent_type.to_string()),
-                            ..sig
-                        }));
-                    }
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: Some(parent_type.to_string()),
+                        ..sig
+                    }));
                 }
             }
         }

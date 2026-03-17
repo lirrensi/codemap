@@ -36,16 +36,16 @@ fn collect_signatures(source: &str, root: Node) -> HashMap<String, String> {
         if child.kind() == "declarations" {
             let mut dc = child.walk();
             for decl in child.children(&mut dc) {
-                if decl.kind() == "signature" {
-                    if let Some((name, ret_type)) = extract_signature_info(source, decl) {
-                        sigs.insert(name, ret_type);
-                    }
+                if decl.kind() == "signature"
+                    && let Some((name, ret_type)) = extract_signature_info(source, decl)
+                {
+                    sigs.insert(name, ret_type);
                 }
             }
-        } else if child.kind() == "signature" {
-            if let Some((name, ret_type)) = extract_signature_info(source, child) {
-                sigs.insert(name, ret_type);
-            }
+        } else if child.kind() == "signature"
+            && let Some((name, ret_type)) = extract_signature_info(source, child)
+        {
+            sigs.insert(name, ret_type);
         }
     }
     sigs

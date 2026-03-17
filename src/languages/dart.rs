@@ -34,7 +34,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "type_alias" => {
-                if let Some((t, type_name)) = extract_named(source, child, TypeKind::TypeAlias) {
+                if let Some((t, _type_name)) = extract_named(source, child, TypeKind::TypeAlias) {
                     items.push(Extractable::Type(t));
                     // Type aliases don't typically have methods, but we'll keep the pattern consistent
                 }

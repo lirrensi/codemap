@@ -229,8 +229,8 @@ fn collect_recursive(dir: &Path, exts: &[&str], out: &mut Vec<PathBuf>) {
         let path = entry.path();
         if path.is_dir() {
             // Skip common non-source directories
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if matches!(
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && matches!(
                     name,
                     "node_modules"
                         | "target"
@@ -240,15 +240,15 @@ fn collect_recursive(dir: &Path, exts: &[&str], out: &mut Vec<PathBuf>) {
                         | ".tox"
                         | "dist"
                         | "build"
-                ) {
-                    continue;
-                }
+                )
+            {
+                continue;
             }
             collect_recursive(&path, exts, out);
-        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if exts.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
-                out.push(path);
-            }
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && exts.iter().any(|e| e.eq_ignore_ascii_case(ext))
+        {
+            out.push(path);
         }
     }
 }
@@ -436,10 +436,10 @@ fn main() {
     let mut total_empty_snippets = 0;
 
     for lang in LANG_REPOS {
-        if let Some(f) = filter_lang {
-            if !lang.name.eq_ignore_ascii_case(f) {
-                continue;
-            }
+        if let Some(f) = filter_lang
+            && !lang.name.eq_ignore_ascii_case(f)
+        {
+            continue;
         }
 
         eprintln!("\n=== {} ===", lang.name);

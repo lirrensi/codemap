@@ -8,10 +8,10 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
     let mut cursor = root.walk();
 
     for child in root.children(&mut cursor) {
-        if child.kind() == "function_definition" {
-            if let Some(sig) = extract_function(source, child) {
-                items.push(Extractable::Function(sig));
-            }
+        if child.kind() == "function_definition"
+            && let Some(sig) = extract_function(source, child)
+        {
+            items.push(Extractable::Function(sig));
         }
     }
 

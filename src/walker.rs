@@ -29,10 +29,10 @@ pub fn discover_files(root: &Path, excludes: &[String]) -> Vec<PathBuf> {
 
             // Apply exclude glob patterns
             for pattern in excludes {
-                if let Ok(glob) = glob::Pattern::new(pattern) {
-                    if glob.matches_path(path) {
-                        return None;
-                    }
+                if let Ok(glob) = glob::Pattern::new(pattern)
+                    && glob.matches_path(path)
+                {
+                    return None;
                 }
             }
 

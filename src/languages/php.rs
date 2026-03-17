@@ -106,13 +106,13 @@ fn extract_class_members(
         if child.kind() == "declaration_list" {
             let mut dc = child.walk();
             for member in child.children(&mut dc) {
-                if member.kind() == "method_declaration" {
-                    if let Some(sig) = extract_function(source, member) {
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: Some(parent_type.to_string()),
-                            ..sig
-                        }));
-                    }
+                if member.kind() == "method_declaration"
+                    && let Some(sig) = extract_function(source, member)
+                {
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: Some(parent_type.to_string()),
+                        ..sig
+                    }));
                 }
             }
         }

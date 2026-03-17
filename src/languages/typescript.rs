@@ -28,7 +28,7 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
                 }
             }
             "type_alias_declaration" => {
-                if let Some((t, type_name)) = extract_type_alias(source, child) {
+                if let Some((t, _type_name)) = extract_type_alias(source, child) {
                     items.push(Extractable::Type(t));
                     // Type aliases don't typically have methods, but we'll keep the pattern consistent
                 }
@@ -135,13 +135,13 @@ fn extract_class_methods(
         if child.kind() == "class_body" {
             let mut body_cursor = child.walk();
             for member in child.children(&mut body_cursor) {
-                if member.kind() == "method_definition" {
-                    if let Some(sig) = extract_method(source, member) {
-                        items.push(Extractable::Function(FunctionSignature {
-                            parent_type: Some(parent_type.to_string()),
-                            ..sig
-                        }));
-                    }
+                if member.kind() == "method_definition"
+                    && let Some(sig) = extract_method(source, member)
+                {
+                    items.push(Extractable::Function(FunctionSignature {
+                        parent_type: Some(parent_type.to_string()),
+                        ..sig
+                    }));
                 }
             }
         }

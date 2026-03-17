@@ -16,21 +16,20 @@ pub fn extract(source: &str, tree: &tree_sitter::Tree) -> Vec<Extractable> {
             // local function name() ... end
             let mut vc = child.walk();
             for c in child.children(&mut vc) {
-                if c.kind() == "function_definition" {
-                    if let Some(name) =
+                if c.kind() == "function_definition"
+                    && let Some(name) =
                         child_by_kind(child, "identifier").map(|n| node_text(n, source).to_string())
-                    {
-                        let params = child_by_kind(c, "parameters")
-                            .map(|p| node_text(p, source).to_string())
-                            .unwrap_or_else(|| "()".to_string());
-                        items.push(Extractable::Function(FunctionSignature {
-                            name,
-                            params,
-                            return_type: None,
-                            line: child.start_position().row as u32 + 1,
-                            parent_type: None,
-                        }));
-                    }
+                {
+                    let params = child_by_kind(c, "parameters")
+                        .map(|p| node_text(p, source).to_string())
+                        .unwrap_or_else(|| "()".to_string());
+                    items.push(Extractable::Function(FunctionSignature {
+                        name,
+                        params,
+                        return_type: None,
+                        line: child.start_position().row as u32 + 1,
+                        parent_type: None,
+                    }));
                 }
             }
         }

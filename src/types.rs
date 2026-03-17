@@ -1,4 +1,4 @@
-/// Core types shared across all modules.
+//! Core types shared across all modules.
 
 /// A single extractable item from a source file.
 #[derive(Debug, Clone)]
