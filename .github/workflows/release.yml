@@ -73,10 +73,9 @@ jobs:
           rustc --version
           cargo --version
           echo "Target: ${{ matrix.target }}"
-          echo "Runner OS: ${{ runner.os }}"
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} 2>&1 || (cargo build --release --target ${{ matrix.target }} -vv 2>&1 | tail -100; exit 1)
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -110,7 +109,7 @@ jobs:
           artifact="${{ matrix.artifact }}"
           binary="${{ matrix.binary }}"
           archive_name="codemap-${version}-${artifact}.zip"
-          release_dir="target/${{ matrix.target }}/release"
+          release_dir="$GITHUB_WORKSPACE/target/${{ matrix.target }}/release"
 
           if [ ! -f "$release_dir/$binary" ]; then
             echo "ERROR: Binary not found: $release_dir/$binary"
@@ -119,12 +118,12 @@ jobs:
           fi
 
           sudo apt-get install -y zip || true
-          mkdir -p staging
-          cp "$release_dir/$binary" staging/
-          cp LICENSE staging/
-          cd staging
-          zip -r "../$archive_name" .
-          cd ..
+          staging="$GITHUB_WORKSPACE/staging"
+          mkdir -p "$staging"
+          cp "$release_dir/$binary" "$staging/"
+          cp "$GITHUB_WORKSPACE/LICENSE" "$staging/"
+          cd "$staging"
+          zip -r "$GITHUB_WORKSPACE/$archive_name" .
           echo "Created: $archive_name"
 
       - name: Upload artifact
