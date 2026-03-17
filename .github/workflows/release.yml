@@ -14,6 +14,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build:
@@ -33,11 +34,6 @@ jobs:
             target: aarch64-pc-windows-msvc
             artifact: windows-arm64
             binary: codemap.exe
-          - name: macOS x64
-            runner: macos-13
-            target: x86_64-apple-darwin
-            artifact: macos-x64
-            binary: codemap
           - name: macOS ARM64
             runner: macos-latest
             target: aarch64-apple-darwin
@@ -72,21 +68,15 @@ jobs:
           echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
-      # Windows ARM64 needs to be built natively (no MSVC cross-compiler on x64 runner)
-      # Use x64 runner and build for x64, ARM64 runs via emulation or native ARM64 runner
-      # For now: build on x64 runner, Windows ARM64 can use x64 binary or we use a native runner
-      # Update: Windows ARM64 MSVC cross-compile works with proper setup
-      - name: Setup MSVC for ARM64 (Windows)
-        if: matrix.target == 'aarch64-pc-windows-msvc'
-        shell: pwsh
+      - name: Debug info
         run: |
-          # ARM64 MSVC cross-compilation requires the ARM64 build tools
-          # The windows-latest runner has ARM64 MSVC available via vcvars
-          # Rust handles this through the target specification
-          Write-Output "Building for Windows ARM64 via MSVC cross-compile"
+          rustc --version
+          cargo --version
+          echo "Target: ${{ matrix.target }}"
+          echo "Runner OS: ${{ runner.os }}"
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} 2>&1 || (cargo build --release --target ${{ matrix.target }} -vv 2>&1 | tail -100; exit 1)
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -99,7 +89,6 @@ jobs:
           $archiveName = "codemap-$version-$artifact.zip"
           $releaseDir = "target/${{ matrix.target }}/release"
 
-          # Verify binary exists
           $binPath = Join-Path $releaseDir $binary
           if (-not (Test-Path $binPath)) {
             Write-Error "Binary not found: $binPath"
@@ -111,7 +100,6 @@ jobs:
           New-Item -ItemType Directory -Path $staging -Force | Out-Null
           Copy-Item $binPath "$staging/$binary" -ErrorAction Stop
           Copy-Item "LICENSE" "$staging/" -ErrorAction Stop
-
           Compress-Archive -Path "$staging/*" -DestinationPath $archiveName
           Write-Output "Created: $archiveName"
 
@@ -124,13 +112,13 @@ jobs:
           archive_name="codemap-${version}-${artifact}.zip"
           release_dir="target/${{ matrix.target }}/release"
 
-          # Verify binary exists
           if [ ! -f "$release_dir/$binary" ]; then
             echo "ERROR: Binary not found: $release_dir/$binary"
             ls "$release_dir/" | head -20
             exit 1
           fi
 
+          sudo apt-get install -y zip || true
           mkdir -p staging
           cp "$release_dir/$binary" staging/
           cp LICENSE staging/
@@ -161,14 +149,6 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f -name "*.zip" | sort
 
-      - name: Extract version
-        id: version
-        run: |
-          tag="${{ github.ref_name }}"
-          ver="${tag#v}"
-          echo "VERSION=$ver" >> $GITHUB_OUTPUT
-          echo "TAG=$tag" >> $GITHUB_OUTPUT
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -186,7 +166,6 @@ jobs:
             |----------|-------------|------|
             | Windows | x64 | `codemap-${{ github.ref_name }}-windows-x64.zip` |
             | Windows | ARM64 | `codemap-${{ github.ref_name }}-windows-arm64.zip` |
-            | macOS | Intel (x64) | `codemap-${{ github.ref_name }}-macos-x64.zip` |
             | macOS | Apple Silicon (ARM64) | `codemap-${{ github.ref_name }}-macos-arm64.zip` |
             | Linux | x64 | `codemap-${{ github.ref_name }}-linux-x64.zip` |
             | Linux | ARM64 | `codemap-${{ github.ref_name }}-linux-arm64.zip` |
@@ -209,10 +188,6 @@ jobs:
             - **Windows**: MinGW-w64 or MSVC
             - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
             - **Linux**: `gcc` or `clang` (usually pre-installed)
-
-            ### What's new
-
-            See [CHANGELOG](https://github.com/lirrensi/codemap/compare/...) for details.
           draft: false
           prerelease: false
         env:
