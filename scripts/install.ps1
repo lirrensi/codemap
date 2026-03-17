@@ -14,13 +14,22 @@ function Die($msg)   { Write-Host "x $msg" -ForegroundColor Red; exit 1 }
 
 # --- detect arch ---
 function Get-Arch {
-    $arch = (Get-CimInstance Win32_Processor).Architecture
-    switch ($arch) {
-        0 { return "x86_64" }  # x86
-        5 { return "aarch64" } # ARM
-        9 { return "x86_64" }  # x64
-        12 { return "aarch64" } # ARM64
-        default { return "x86_64" }
+    # Use PROCESSOR_ARCHITECTURE env var (more reliable than CIM on some systems)
+    $pa = $env:PROCESSOR_ARCHITECTURE
+    switch ($pa) {
+        "AMD64"   { return "x64" }
+        "ARM64"   { return "arm64" }
+        "x86"     { return "x86" }
+        default {
+            # Fallback to CIM
+            $arch = (Get-CimInstance Win32_Processor).Architecture
+            switch ($arch) {
+                9  { return "x64" }
+                12 { return "arm64" }
+                0  { return "x86" }
+                default { return "x64" }
+            }
+        }
     }
 }
 
@@ -39,7 +48,7 @@ function Get-LatestVersion {
 # --- main ---
 function Main {
     $arch = Get-Arch
-    Info "Detecting platform... ${arch}-windows"
+    Info "Detecting platform... windows-$arch"
 
     # Get latest version
     Info "Fetching latest release..."
@@ -47,7 +56,7 @@ function Main {
     Info "Latest version: $version"
 
     # Build URL
-    $filename = "$BINARY-$arch-windows.zip"
+    $filename = "codemap-$version-windows-$arch.zip"
     $url = "https://github.com/$REPO/releases/download/$version/$filename"
     Info "Downloading from: $url"
 
@@ -59,7 +68,16 @@ function Main {
     try {
         # Download
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing -ErrorAction Stop
+        }
+        catch {
+            # Fallback: try without 'v' prefix
+            $filename2 = "codemap-$($version.TrimStart('v'))-windows-$arch.zip"
+            $url2 = "https://github.com/$REPO/releases/download/$version/$filename2"
+            Info "Retrying: $url2"
+            Invoke-WebRequest -Uri $url2 -OutFile $archive -UseBasicParsing -ErrorAction Stop
+        }
         $ProgressPreference = 'Continue'
 
         # Extract
@@ -81,7 +99,7 @@ function Main {
         # Choose install directory
         $installDir = $env:CODEMAP_INSTALL_DIR
         if (-not $installDir) {
-            # Try user-local bin first (no admin needed)
+            # User-local bin (no admin needed)
             $installDir = Join-Path $env:LOCALAPPDATA "codemap\bin"
         }
 

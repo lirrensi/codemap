@@ -32,8 +32,8 @@ detect_os() {
 detect_arch() {
     arch="$(uname -m)"
     case "$arch" in
-        x86_64|amd64)  echo "x86_64" ;;
-        aarch64|arm64) echo "aarch64" ;;
+        x86_64|amd64)  echo "x64" ;;
+        aarch64|arm64) echo "arm64" ;;
         armv7l|armv6l) echo "arm" ;;
         *)             die "Unsupported architecture: $arch" ;;
     esac
@@ -48,17 +48,7 @@ get_latest_version() {
     echo "$version"
 }
 
-# --- build download URL ---
-build_url() {
-    local version="$1"
-    local os="$2"
-    local arch="$3"
-    local ext="${4:-tar.gz}"
-
-    local filename="${BINARY}-${arch}-${os}.${ext}"
-    echo "https://github.com/${REPO}/releases/download/${version}/${filename}"
-}
-
+# --- main ---
 main() {
     need_cmd curl
     need_cmd uname
@@ -66,37 +56,39 @@ main() {
     os=$(detect_os)
     arch=$(detect_arch)
 
-    info "Detecting platform... ${arch}-${os}"
+    info "Detecting platform... ${os}-${arch}"
 
     # Get latest version
     info "Fetching latest release..."
     version=$(get_latest_version)
     info "Latest version: ${version}"
 
-    # Determine archive format
-    if [ "$os" = "macos" ]; then
-        ext="tar.gz"
-    else
-        ext="tar.gz"
-    fi
-
-    url=$(build_url "$version" "$os" "$arch" "$ext")
+    # Build download URL
+    filename="codemap-${version}-${os}-${arch}.zip"
+    url="https://github.com/${REPO}/releases/download/${version}/${filename}"
     info "Downloading from: ${url}"
 
     # Create temp dir
     tmpdir=$(mktemp -d 2>/dev/null || mktemp -d -t codemap)
     trap 'rm -rf "$tmpdir"' EXIT
 
-    archive="${tmpdir}/codemap.${ext}"
-    curl -fSL --progress-bar -o "$archive" "$url" || die "Download failed"
+    archive="${tmpdir}/codemap.zip"
+    curl -fSL --progress-bar -o "$archive" "$url" || {
+        # Fallback: try without 'v' prefix in filename
+        filename2="codemap-${version#v}-${os}-${arch}.zip"
+        url2="https://github.com/${REPO}/releases/download/${version}/${filename2}"
+        info "Retrying: ${url2}"
+        curl -fSL --progress-bar -o "$archive" "$url2" || die "Download failed. Check https://github.com/${REPO}/releases"
+    }
 
     # Extract
     info "Extracting..."
-    tar -xzf "$archive" -C "$tmpdir"
+    need_cmd unzip
+    unzip -qo "$archive" -d "$tmpdir"
 
     # Find the binary
     bin_path="${tmpdir}/${BINARY}"
-    [ -f "$bin_path" ] || die "Binary not found in archive"
+    [ -f "$bin_path" ] || die "Binary '$BINARY' not found in archive"
 
     # Install
     info "Installing to ${INSTALL_DIR}..."

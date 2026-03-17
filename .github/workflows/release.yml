@@ -1,0 +1,219 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: windows-x64
+            binary: codemap.exe
+          - name: Windows ARM64
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            artifact: windows-arm64
+            binary: codemap.exe
+          - name: macOS x64
+            runner: macos-13
+            target: x86_64-apple-darwin
+            artifact: macos-x64
+            binary: codemap
+          - name: macOS ARM64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            artifact: macos-arm64
+            binary: codemap
+          - name: Linux x64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x64
+            binary: codemap
+          - name: Linux ARM64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: linux-arm64
+            binary: codemap
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux ARM64 needs a C cross-compiler for tree-sitter grammars
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      # Windows ARM64 needs to be built natively (no MSVC cross-compiler on x64 runner)
+      # Use x64 runner and build for x64, ARM64 runs via emulation or native ARM64 runner
+      # For now: build on x64 runner, Windows ARM64 can use x64 binary or we use a native runner
+      # Update: Windows ARM64 MSVC cross-compile works with proper setup
+      - name: Setup MSVC for ARM64 (Windows)
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          # ARM64 MSVC cross-compilation requires the ARM64 build tools
+          # The windows-latest runner has ARM64 MSVC available via vcvars
+          # Rust handles this through the target specification
+          Write-Output "Building for Windows ARM64 via MSVC cross-compile"
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ github.ref_name }}"
+          $artifact = "${{ matrix.artifact }}"
+          $binary = "${{ matrix.binary }}"
+          $archiveName = "codemap-$version-$artifact.zip"
+          $releaseDir = "target/${{ matrix.target }}/release"
+
+          # Verify binary exists
+          $binPath = Join-Path $releaseDir $binary
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Binary not found: $binPath"
+            Get-ChildItem $releaseDir -Filter "*.exe" | ForEach-Object { Write-Output "  Found: $($_.Name)" }
+            exit 1
+          }
+
+          $staging = "staging"
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          Copy-Item $binPath "$staging/$binary" -ErrorAction Stop
+          Copy-Item "LICENSE" "$staging/" -ErrorAction Stop
+
+          Compress-Archive -Path "$staging/*" -DestinationPath $archiveName
+          Write-Output "Created: $archiveName"
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          version="${{ github.ref_name }}"
+          artifact="${{ matrix.artifact }}"
+          binary="${{ matrix.binary }}"
+          archive_name="codemap-${version}-${artifact}.zip"
+          release_dir="target/${{ matrix.target }}/release"
+
+          # Verify binary exists
+          if [ ! -f "$release_dir/$binary" ]; then
+            echo "ERROR: Binary not found: $release_dir/$binary"
+            ls "$release_dir/" | head -20
+            exit 1
+          fi
+
+          mkdir -p staging
+          cp "$release_dir/$binary" staging/
+          cp LICENSE staging/
+          cd staging
+          zip -r "../$archive_name" .
+          cd ..
+          echo "Created: $archive_name"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codemap-${{ matrix.artifact }}
+          path: codemap-*.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f -name "*.zip" | sort
+
+      - name: Extract version
+        id: version
+        run: |
+          tag="${{ github.ref_name }}"
+          ver="${tag#v}"
+          echo "VERSION=$ver" >> $GITHUB_OUTPUT
+          echo "TAG=$tag" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: codemap ${{ github.ref_name }}
+          files: artifacts/*.zip
+          body: |
+            ## codemap ${{ github.ref_name }}
+
+            Generate AI-optimized indexes of your codebase — functions, types, signatures in clean markdown.
+
+            ### Downloads
+
+            | Platform | Architecture | File |
+            |----------|-------------|------|
+            | Windows | x64 | `codemap-${{ github.ref_name }}-windows-x64.zip` |
+            | Windows | ARM64 | `codemap-${{ github.ref_name }}-windows-arm64.zip` |
+            | macOS | Intel (x64) | `codemap-${{ github.ref_name }}-macos-x64.zip` |
+            | macOS | Apple Silicon (ARM64) | `codemap-${{ github.ref_name }}-macos-arm64.zip` |
+            | Linux | x64 | `codemap-${{ github.ref_name }}-linux-x64.zip` |
+            | Linux | ARM64 | `codemap-${{ github.ref_name }}-linux-arm64.zip` |
+
+            ### Quick Install
+
+            **Linux / macOS:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/lirrensi/codemap/main/scripts/install.sh | sh
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/lirrensi/codemap/main/scripts/install.ps1 | iex
+            ```
+
+            ### Prerequisites
+
+            Tree-sitter grammars require a **C compiler** to parse code:
+            - **Windows**: MinGW-w64 or MSVC
+            - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+            - **Linux**: `gcc` or `clang` (usually pre-installed)
+
+            ### What's new
+
+            See [CHANGELOG](https://github.com/lirrensi/codemap/compare/...) for details.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
