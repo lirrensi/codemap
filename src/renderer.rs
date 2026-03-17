@@ -19,14 +19,16 @@ pub fn render(
     l1_output.push_str(&format!("_generated: {}_\n\n", timestamp));
     l2_output.push_str(&format!("_generated: {}_\n\n", timestamp));
 
-    // File tree section
+    // File tree section — wrapped in a code block for valid markdown rendering
     l1_output.push_str("## File Tree\n\n");
+    l1_output.push_str("```text\n");
     l1_output.push_str(tree);
-    l1_output.push('\n');
+    l1_output.push_str("```\n\n");
 
     l2_output.push_str("## File Tree\n\n");
+    l2_output.push_str("```text\n");
     l2_output.push_str(tree);
-    l2_output.push('\n');
+    l2_output.push_str("```\n\n");
 
     for (path, items) in files {
         if items.is_empty() {
