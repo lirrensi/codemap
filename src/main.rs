@@ -83,7 +83,7 @@ fn run_scan(cli: &cli::Cli) {
             fs::create_dir_all(parent).ok();
         }
         let l1_path = cli.output.with_file_name(format!(
-            "{}.L1{}",
+            "{}.L1.{}",
             cli.output.file_stem().unwrap_or_default().to_string_lossy(),
             cli.output.extension().unwrap_or_default().to_string_lossy()
         ));
@@ -94,7 +94,7 @@ fn run_scan(cli: &cli::Cli) {
 
         // Write L2 file
         let l2_path = cli.output.with_file_name(format!(
-            "{}.L2{}",
+            "{}.L2.{}",
             cli.output.file_stem().unwrap_or_default().to_string_lossy(),
             cli.output.extension().unwrap_or_default().to_string_lossy()
         ));
