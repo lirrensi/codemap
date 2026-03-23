@@ -117,8 +117,11 @@ function Main {
         if ($userPath -notlike "*$installDir*") {
             Info "Adding $installDir to user PATH..."
             [Environment]::SetEnvironmentVariable("Path", "$userPath;$installDir", "User")
-            $env:Path = "$env:Path;$installDir"
-            Warn "PATH updated. You may need to restart your terminal."
+            # Update current session PATH so codemap works immediately
+            if ($env:Path -notlike "*$installDir*") {
+                $env:Path = $env:Path.TrimEnd(';') + ";$installDir"
+            }
+            Ok "PATH updated (persistent + current session)"
         }
 
         # Verify
@@ -129,6 +132,16 @@ function Main {
         Write-Host "  codemap                    # scan current directory"
         Write-Host "  codemap setup              # add pre-commit hook"
         Write-Host "  codemap --help             # see all options"
+        Write-Host ""
+
+        # Verify it's accessible
+        $installedPath = (Get-Command codemap -ErrorAction SilentlyContinue).Source
+        if ($installedPath) {
+            $versionOutput = & $installedPath --version 2>&1
+            Ok "codemap is ready: $versionOutput"
+        } else {
+            Warn "codemap installed but not in PATH yet — restart your terminal."
+        }
     }
     finally {
         # Cleanup

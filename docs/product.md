@@ -10,7 +10,19 @@ The tool parses source files using tree-sitter grammars, extracts meaningful ite
 
 ```
 codemap [OPTIONS] [PATH]
+codemap scan [OPTIONS] [PATH]
+codemap setup
+codemap onboard
 ```
+
+### Subcommands
+
+| Command | Description |
+|---|---|
+| *(default)* | Run the scan — same as `codemap scan` |
+| `scan` | Explicitly run the scan. Generates `CODEMAP.L1.md` and `CODEMAP.L2.md` |
+| `setup` | Non-interactive: add pre-commit hook + `.gitignore` entry |
+| `onboard` | Interactive wizard: pre-commit hook, `.gitignore`, and `AGENTS.md` |
 
 ### Arguments
 
@@ -28,11 +40,16 @@ codemap [OPTIONS] [PATH]
 | `--languages <LIST>` | (all) | Comma-separated list of file extensions to include (e.g. `rs,py,go`) |
 | `--tree-depth <N>` | `5` | Max directory depth for the file tree. `0` = unlimited (show everything) |
 
+All scan options are global and work with any subcommand.
+
 ### Examples
 
 ```bash
 # Scan current directory, write to ./docs/CODEMAP.L1.md and CODEMAP.L2.md
 codemap
+
+# Explicit scan subcommand (same behavior)
+codemap scan
 
 # Scan a specific project
 codemap /path/to/project
@@ -49,6 +66,12 @@ codemap --exclude "**/tests/**" --exclude "**/fixtures/**"
 
 # Print to stdout
 codemap --stdout
+
+# Non-interactive project setup
+codemap setup
+
+# Interactive onboarding wizard
+codemap onboard
 ```
 
 ## Output Format
@@ -244,3 +267,41 @@ Extracted when the language supports them. Recognized kinds:
 - Files that cannot be read (permissions, encoding) are silently skipped
 - Files that fail to parse are silently skipped
 - The tool exits with code 0 on success, 1 on write failure
+
+## Project Onboarding
+
+CodeMapper provides two commands for integrating itself into a project.
+
+### `codemap setup` (non-interactive)
+
+Creates or updates two files:
+
+1. **`.pre-commit-config.yaml`** — adds the codemap hook so the index regenerates on every commit
+2. **`.gitignore`** — adds `docs/CODEMAP.*.md` so generated files stay local
+
+Running it twice is safe — it skips anything already configured.
+
+### `codemap onboard` (interactive)
+
+Walks through three steps with yes/no confirmation for each:
+
+1. **Pre-commit hook** — same as `setup`, but also:
+   - Detects if the `pre-commit` tool is installed
+   - If missing, offers to `pip install pre-commit`
+   - After creating the config, offers to run `pre-commit install` to activate
+
+2. **`.gitignore`** — adds `docs/CODEMAP.*.md`. Explains that the codemap regenerates on every commit with timestamps and minor ordering changes, so committing it bloats git history with derivative artifacts that are cheap to regenerate.
+
+3. **`AGENTS.md`** — creates or updates `AGENTS.md` at the repo root with a section documenting that `docs/CODEMAP.L1.md` and `docs/CODEMAP.L2.md` contain the codebase map. Shows the exact text to be appended and offers three choices:
+   - Accept the suggested text
+   - Write your own (free-form multi-line input)
+   - Skip
+
+### Output files
+
+Generated files are placed directly in `docs/`:
+
+| File | Contents |
+|---|---|
+| `docs/CODEMAP.L1.md` | Compact index — names and line numbers |
+| `docs/CODEMAP.L2.md` | Detailed index — full signatures with parameters and return types |

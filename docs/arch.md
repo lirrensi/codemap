@@ -16,14 +16,16 @@
 
 ```
 src/
-  main.rs          Entry point: orchestrates the pipeline
-  cli.rs           CLI argument definitions (clap)
+  main.rs          Entry point: dispatches subcommands, runs scan pipeline
+  cli.rs           CLI argument definitions and subcommand enum (clap)
   lib.rs           Public module exports
   types.rs         Core data types (Extractable, FunctionSignature, NamedType)
   parser.rs        Language dispatch and tree-sitter parsing
   renderer.rs      Markdown output generation (L1 and L2)
   tree.rs          File tree construction with config collapsing
   walker.rs        File discovery with gitignore support
+  setup.rs         Non-interactive setup (pre-commit config + gitignore)
+  onboard.rs       Interactive onboarding wizard (pre-commit + gitignore + AGENTS.md)
   languages/       Per-language extractors
     mod.rs         Shared helpers (node_text, child_by_kind, children_by_kind)
     rust_lang.rs
@@ -69,7 +71,11 @@ The tool runs a linear pipeline in `main.rs`:
 
 ### `cli.rs`
 
-Defines the `Cli` struct using clap derive. Fields map directly to CLI flags. No logic beyond parsing. Includes `--tree-depth` (default: 5) for controlling file tree depth in output.
+Defines the `Cli` struct using clap derive. Scan options (path, output, exclude, languages, tree-depth, stdout) are global fields. The `Commands` enum defines three subcommands:
+
+- `Scan` — runs the scan pipeline (same as default/no subcommand)
+- `Setup` — non-interactive setup via `setup.rs`
+- `Onboard` — interactive setup via `onboard.rs`
 
 ### `types.rs`
 
@@ -121,6 +127,33 @@ Takes the sorted `BTreeMap<PathBuf, Vec<Extractable>>` and a pre-built tree stri
 - **L2** — Full signatures. Same structure. Functions show `name(params) -> returnType :line`. Same nesting.
 
 Both include a header with generation timestamp and the file tree section. Empty files are skipped.
+
+### `setup.rs`
+
+Non-interactive project setup. `run_setup() -> i32` does two things:
+
+1. **Pre-commit config** — creates `.pre-commit-config.yaml` or appends the codemap hook entry if the file exists. Skips if codemap is already configured.
+2. **Gitignore** — adds `docs/CODEMAP.*.md` to `.gitignore` (or creates one). Skips if already present.
+
+Finds the git repo root by walking parent directories from `cwd`.
+
+### `onboard.rs`
+
+Interactive onboarding wizard. `run_onboard() -> i32` walks through three steps, each with a yes/no prompt:
+
+1. **Pre-commit hook** — same config logic as `setup.rs`, plus:
+   - Checks if `pre-commit` binary exists via `command_exists()` (runs `pre-commit --version`)
+   - If missing: offers `pip install pre-commit`
+   - After config creation: offers to run `pre-commit install` to activate immediately
+
+2. **Gitignore** — adds `docs/CODEMAP.*.md`. Displays explanation that the codemap regenerates every commit with timestamps, so committing it bloats history with derivative artifacts.
+
+3. **AGENTS.md** — shows a preview of the suggested text, then offers a three-way choice via `prompt_accept_custom_skip()`:
+   - Accept suggested text
+   - Write your own (multi-line stdin until empty line)
+   - Skip
+
+Interactive input uses raw stdin/stderr reads. No external dependencies beyond `std::process::Command` for running pip and pre-commit.
 
 ### `languages/` — Per-Language Extractors
 

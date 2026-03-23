@@ -1,25 +1,25 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PRE_COMMIT_REPO: &str = "https://github.com/yourorg/codemap";
-
 const CODEMAP_GITIGNORE: &str = "docs/CODEMAP.*.md";
 
 const NEW_CONFIG: &str = r#"repos:
-  - repo: https://github.com/yourorg/codemap
-    rev: v0.1.0
+  - repo: local
     hooks:
       - id: codemap
         name: Update codebase index
+        entry: codemap
+        language: system
         pass_filenames: false
 "#;
 
 const HOOK_ENTRY: &str = r#"
-  - repo: https://github.com/yourorg/codemap
-    rev: v0.1.0
+  - repo: local
     hooks:
       - id: codemap
         name: Update codebase index
+        entry: codemap
+        language: system
         pass_filenames: false
 "#;
 
@@ -69,7 +69,7 @@ pub fn run_setup() -> i32 {
     // 1. Pre-commit hook
     if config_path.exists() {
         let content = fs::read_to_string(&config_path).unwrap_or_default();
-        if content.contains("codemap") || content.contains(PRE_COMMIT_REPO) {
+        if content.contains("codemap") {
             eprintln!("  Pre-commit: already configured");
         } else {
             let updated = format!("{}\n{}", content.trim_end(), HOOK_ENTRY);

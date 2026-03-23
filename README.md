@@ -16,15 +16,18 @@ Supports **25+ languages** out of the box. Parses in parallel. Respects `.gitign
 
 ---
 
-## Why?
+## Why this exists
 
-You're going to read files. That's unavoidable. But *which* files?
+When an AI agent (or a new developer) lands on a codebase, the first thing it does is read files. Lots of them. Most of those files are irrelevant — config, boilerplate, glue code. The useful signal is buried in noise: *which file has the auth logic? where's the database schema? what does this function actually return?*
 
-Without a map, you open everything. You skim directories. You read 30 files to find the 3 that matter. Most of that context is junk — it clutters your thinking and wastes tokens.
+CodeMapper gives you that signal up front. One small markdown file with every function name, every type, every signature, with line numbers. You read the map first, then go directly to the 3 files that matter instead of skimming 30.
 
-CodeMapper flips that. You read **one small file** first — a skeleton of your codebase. Every function name, every type, every method, with line numbers. In under a second you know: *the code I need is in `src/auth/handler.rs`, lines 45 and 112*. You read only what matters.
+This works for:
+- **AI agents** — Feed `CODEMAP.L2.md` into Claude, GPT, Cursor, or Copilot instead of pasting entire files. The model gets the full structure of your codebase in a fraction of the tokens.
+- **Human developers** — Onboarding, code review, navigation. Find what you need without grepping blind.
+- **Documentation** — Auto-generated, always up-to-date function and type reference.
 
-The trade-off is explicit: **a small amount of structured context** (the map) against **a large amount of unstructured noise** (reading everything). The map isn't perfect. It doesn't have docstrings or implementation details. But it's *tiny* — and that's the point.
+The trade-off is explicit: **a small amount of structured context** (the map) against **a large amount of unstructured noise** (reading everything). The map doesn't have docstrings or implementation details. But it's *tiny* — and that's the point.
 
 There are two modes for this reason:
 - **L1 (concise)** — names and line numbers only. Skim the whole codebase in seconds.
@@ -115,6 +118,7 @@ codemap --stdout
 | `--stdout` | `false` | Print L1 output to stdout instead of writing files |
 | `--exclude <PATTERN>` | — | Glob pattern to exclude. Repeatable. |
 | `--languages <LIST>` | all | Comma-separated extensions to include (e.g. `rs,py,go`) |
+| `--tree-depth <N>` | `5` | Max directory depth in the file tree header. `0` = unlimited |
 
 ### Examples
 
@@ -213,18 +217,66 @@ CSS, HTML, JSON, YAML
 
 ## Integration
 
-### Quick setup
+CodeMapper can set itself up in your repo across three areas of developer experience:
+
+1. **Pre-commit hook** — regenerates the code index automatically before every commit
+2. **Gitignore** — keeps generated files out of version control (each developer gets their own)
+3. **AI agent setup** — tells tools like Cursor, Copilot, and Claude where to find the index
+
+### Quick setup (non-interactive)
 
 ```bash
 codemap setup
 ```
 
-This does two things:
+Sets up **pre-commit hook** and **gitignore** in one command. No prompts — it just does it.
 
-1. **Pre-commit hook** — creates or updates `.pre-commit-config.yaml` with the codemap hook
-2. **Gitignore** — adds `docs/CODEMAP.*.md` to `.gitignore` (or creates one)
+- Creates or updates `.pre-commit-config.yaml` with the codemap hook
+- Adds `docs/CODEMAP.*.md` to `.gitignore` (or creates one)
 
 Running it twice is safe — it skips anything already configured.
+
+### Interactive onboarding
+
+```bash
+codemap onboard
+```
+
+A guided wizard that walks you through all **three areas**, step by step:
+
+```
+  Step 1/3: Pre-commit hook
+  Set up pre-commit hook? [Y/n]:
+```
+
+- Detects if `pre-commit` is installed; offers to install it via `pip` if missing
+- Offers to run `pre-commit install` to activate the hook immediately
+
+```
+  Step 2/3: .gitignore
+  Add 'docs/CODEMAP.*.md' to .gitignore? [Y/n]:
+```
+
+- Explains why gitignoring is recommended (regenerated files add noise to diffs)
+
+```
+  Step 3/3: AGENTS.md
+  Suggested text to append:
+  ┌──────────────────────────────────────────────────────────┐
+  │ ## Code Map                                             │
+  │ ...                                                      │
+  └──────────────────────────────────────────────────────────┘
+  What would you like to do?
+  [a] Accept suggested text
+  [e] Edit — write your own
+  [s] Skip
+```
+
+- Creates or updates `AGENTS.md` with a reference to the generated code maps
+- AI tools (Cursor, Copilot, Claude) read this file to understand your project faster
+- You can accept the default text, write your own, or skip
+
+Each step asks for confirmation before making changes. Safe to run on an existing repo.
 
 ### How it works
 
@@ -257,7 +309,8 @@ Just remove the `docs/CODEMAP.*.md` line from `.gitignore`. Useful for public re
 
 1. Remove the codemap entry from `.pre-commit-config.yaml`
 2. Remove the `docs/CODEMAP.*.md` line from `.gitignore`
-3. Delete `docs/CODEMAP.L1.md` and `docs/CODEMAP.L2.md` if they exist
+3. Remove the codemap section from `AGENTS.md` (if you used `onboard`)
+4. Delete `docs/CODEMAP.L1.md` and `docs/CODEMAP.L2.md` if they exist
 
 No trace left in the repo.
 
@@ -267,11 +320,12 @@ Add to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/lirrensi/codemap
-    rev: v0.1.0
+  - repo: local
     hooks:
       - id: codemap
         name: Update codebase index
+        entry: codemap
+        language: system
         pass_filenames: false
 ```
 
@@ -285,7 +339,7 @@ docs/CODEMAP.*.md
 
 ## Use cases
 
-- **LLM context**: Feed `CODEMAP.L2.md` into Claude, GPT, etc. instead of pasting entire files. Gives the model the full structure of your codebase.
+- **AI agent context**: Feed `CODEMAP.L2.md` into Claude, GPT, Cursor, or Copilot. The model gets the full structure of your codebase without reading every file. Use `codemap onboard` to set up `AGENTS.md` so your tools find it automatically.
 - **Onboarding**: New team members get a bird's-eye view of the codebase in one file.
 - **Code review**: Quickly see what changed structurally between versions.
 - **Navigation**: Find exactly which file has what you need without grepping blind.

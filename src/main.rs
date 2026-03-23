@@ -2,7 +2,7 @@ mod cli;
 
 use clap::Parser;
 use cli::Commands;
-use codemap::{parser, renderer, setup, tree, types, walker};
+use codemap::{onboard, parser, renderer, setup, tree, types, walker};
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::fs;
@@ -13,15 +13,22 @@ fn main() {
     let cli = cli::Cli::parse();
 
     // Dispatch subcommand
-    if let Some(ref _cmd) = cli.command {
-        match _cmd {
+    if let Some(ref cmd) = cli.command {
+        match cmd {
+            Commands::Scan => {
+                run_scan(&cli);
+                return;
+            }
             Commands::Setup => {
                 std::process::exit(setup::run_setup());
+            }
+            Commands::Onboard => {
+                std::process::exit(onboard::run_onboard());
             }
         }
     }
 
-    // Default: scan mode (existing behavior)
+    // Default: scan mode (same as `codemap scan`)
     run_scan(&cli);
 }
 
