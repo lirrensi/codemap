@@ -35,7 +35,7 @@ jobs:
             artifact: windows-arm64
             binary: codemap.exe
           - name: macOS x64
-            runner: macos-13
+            runner: macos-15-intel
             target: x86_64-apple-darwin
             artifact: macos-x64
             binary: codemap
@@ -139,6 +139,7 @@ jobs:
 
   release:
     name: Create Release
+    if: always()
     needs: build
     runs-on: ubuntu-latest
     steps:
