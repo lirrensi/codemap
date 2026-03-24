@@ -10,8 +10,8 @@ tags: [code, codemap, feature, progressive-disclosure]
 
 ## Goal
 Generate two output files:
-- **CODEMAP-L1.md**: Names only, WITH structural nesting (methods under parent type)
-- **CODEMAP-L2.md**: Full current output (signatures, params, return types, line numbers)
+- **CODEMAP-L1.md**: Line-first names only, WITH structural nesting (methods under parent type)
+- **CODEMAP-L2.md**: Line-first full current output (signatures, params, return types, line numbers)
 
 Both always generated together.
 
@@ -54,7 +54,7 @@ items.push(Extractable::Function(FunctionSignature { parent_type: Some(parent_na
 ### Step 3: `src/renderer.rs`
 Rewrite to:
 - Group items by `parent_type` (methods nested under their type, standalone functions separate)
-- Generate L1 (names only) and L2 (full signatures) output strings
+- Generate L1 (line-first names only) and L2 (line-first full signatures) output strings
 - Return both as a struct
 
 ### Step 4: `src/main.rs`

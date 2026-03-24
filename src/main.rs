@@ -1,3 +1,9 @@
+//! FILE: src/main.rs
+//! PURPOSE: Run the scan pipeline and write the generated code map files.
+//! OWNS: CLI dispatch, file discovery, parsing, rendering, and file writes.
+//! EXPORTS: main(), run_scan()
+//! DOCS: README.md, docs/product.md, docs/arch.md
+
 mod cli;
 
 use clap::Parser;
@@ -59,27 +65,30 @@ fn run_scan(cli: &cli::Cli) {
     };
 
     // 3. Parse all files in parallel
-    let results: Vec<(PathBuf, Vec<types::Extractable>)> = files
+    let results: Vec<(PathBuf, Vec<types::Extractable>, usize)> = files
         .par_iter()
         .filter_map(|path| {
             let source = fs::read_to_string(path).ok()?;
+            let line_count = source.lines().count();
             let items = parser::extract_from_file(path, &source)?;
             if items.is_empty() {
                 None
             } else {
-                Some((path.clone(), items))
+                Some((path.clone(), items, line_count))
             }
         })
         .collect();
 
     // 4. Sort by file path and build the map
     let mut file_map = BTreeMap::new();
-    for (path, items) in results {
+    let mut line_counts = BTreeMap::new();
+    for (path, items, line_count) in results {
+        line_counts.insert(path.clone(), line_count);
         file_map.insert(path, items);
     }
 
     // 5. Render
-    let (l1_output, l2_output) = renderer::render(&root, &file_map, &tree_output);
+    let (l1_output, l2_output) = renderer::render(&root, &file_map, &line_counts, &tree_output);
 
     // 6. Write or print
     if cli.stdout {

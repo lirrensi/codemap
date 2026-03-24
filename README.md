@@ -7,10 +7,10 @@ codemap ./my-project
 ```
 
 Produces two files:
-- **CODEMAP.L1.md** — Names only (compact)
-- **CODEMAP.L2.md** — Full signatures (detailed)
+- **CODEMAP.L1.md** — Line-first names only (compact)
+- **CODEMAP.L2.md** — Line-first full signatures (detailed)
 
-Each file starts with a **file tree header** — a visual map of the project structure. Code files listed individually, config files collapsed into summaries (e.g., `*.json (4 files)`). Read this first to know where everything lives.
+Each file starts with a **file tree header** — a visual map of the project structure. Right after that is a short read-me block explaining the `line | item` format. Code files are listed individually, config files collapsed into summaries (e.g., `*.json (4 files)`). Read this first to know where everything lives.
 
 Supports **25+ languages** out of the box. Parses in parallel. Respects `.gitignore`.
 
@@ -20,7 +20,7 @@ Supports **25+ languages** out of the box. Parses in parallel. Respects `.gitign
 
 When an AI agent (or a new developer) lands on a codebase, the first thing it does is read files. Lots of them. Most of those files are irrelevant — config, boilerplate, glue code. The useful signal is buried in noise: *which file has the auth logic? where's the database schema? what does this function actually return?*
 
-CodeMapper gives you that signal up front. One small markdown file with every function name, every type, every signature, with line numbers. You read the map first, then go directly to the 3 files that matter instead of skimming 30.
+CodeMapper gives you that signal up front. One small markdown file with every function name, every type, every signature, with the line number first. You read the map first, then go directly to the 3 files that matter instead of skimming 30.
 
 This works for:
 - **AI agents** — Feed `CODEMAP.L2.md` into Claude, GPT, Cursor, or Copilot instead of pasting entire files. The model gets the full structure of your codebase in a fraction of the tokens.
@@ -30,8 +30,8 @@ This works for:
 The trade-off is explicit: **a small amount of structured context** (the map) against **a large amount of unstructured noise** (reading everything). The map doesn't have docstrings or implementation details. But it's *tiny* — and that's the point.
 
 There are two modes for this reason:
-- **L1 (concise)** — names and line numbers only. Skim the whole codebase in seconds.
-- **L2 (rich)** — full parameter lists and return types. Use `grep`/`rg` to find exactly the function you need, then read that file.
+- **L1 (concise)** — line-first names only. Skim the whole codebase in seconds.
+- **L2 (rich)** — line-first full parameter lists and return types. Use `grep`/`rg` to find exactly the function you need, then read that file.
 
 Read the small file. Find the needle. Read the real file. Done.
 
@@ -159,9 +159,22 @@ Every generated file starts with a visual tree of the project structure:
 
 Code files are listed individually. Config and data files (JSON, YAML, TOML, etc.) are collapsed into summaries so the tree stays readable. This gives you the lay of the land before diving into the signatures below.
 
+### How to Read This
+
+```text
+## path/to/file.ext (127 lines)
+34 | function_name(function_parameters) -> return_type
+```
+
+- `path/to/file.ext` is the file being indexed
+- `127 lines` is the total number of lines in that file
+- `34` is the 1-based line number where the item starts
+- `|` separates the line number from the extracted item
+- The item text is the name in L1, or the full signature in L2
+
 ### L1 — Names Only
 
-Compact. Function names, type names, line numbers. Methods nested under their parent type.
+Compact. Line-first function names, type names, and nested methods.
 
 ```markdown
 # CODEMAP (Level 1 - Names Only)
@@ -172,12 +185,12 @@ _generated: 2026-03-17T12:00:00Z_
 │   └── main.rs
 ...
 
-## src/main.rs
+## src/main.rs (42 lines)
 - `Config` (struct)
-- `main` :1
+1 | `main`
   In `Config`:
-    - `new` :5
-    - `validate` :12
+    5 | `new`
+    12 | `validate`
 ```
 
 ### L2 — Full Signatures
@@ -193,12 +206,12 @@ _generated: 2026-03-17T12:00:00Z_
 │   └── main.rs
 ...
 
-## src/main.rs
+## src/main.rs (42 lines)
 - `Config` (struct)
-  - `main()` :1
+1 | `main()`
   In `Config`:
-    - `new(name: String) -> Config` :5
-    - `validate(&self) -> bool` :12
+    5 | `new(name: String) -> Config`
+    12 | `validate(&self) -> bool`
 ```
 
 ---

@@ -123,10 +123,10 @@ Builds a compact file tree string from discovered paths. Two entry points:
 
 Takes the sorted `BTreeMap<PathBuf, Vec<Extractable>>` and a pre-built tree string, and produces two markdown strings:
 
-- **L1** — Names only. Header + file tree + per-file sections. Functions show `name :line`. Methods are indented under `In \`ParentType\`:`.
-- **L2** — Full signatures. Same structure. Functions show `name(params) -> returnType :line`. Same nesting.
+- **L1** — Names only. Header + file tree + per-file sections. Functions show `line | name`. Methods are indented under `In \`ParentType\`:`.
+- **L2** — Full signatures. Same structure. Functions show `line | name(params) -> returnType`. Same nesting.
 
-Both include a header with generation timestamp and the file tree section. Empty files are skipped.
+Both include a header with generation timestamp, the file tree section, and a short guide showing the `line | item` format. File sections also include the total line count in their header. Empty files are skipped.
 
 ### `setup.rs`
 

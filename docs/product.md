@@ -121,9 +121,22 @@ tests/
     └── ... (12 more)
 ```
 
+### How to Read This
+
+```text
+## path/to/file.ext (127 lines)
+34 | function_name(function_parameters) -> return_type
+```
+
+- `path/to/file.ext` is the file being indexed
+- `127 lines` is the total number of lines in that file
+- `34` is the 1-based line number where the item starts
+- `|` separates the line number from the extracted item
+- The item text is the name in L1, or the full signature in L2
+
 ### L1 — Names Only
 
-Compact view. Lists type names and function names with line numbers. Methods are nested under their parent type.
+Compact view. Lists type names and line-first function names. Methods are nested under their parent type.
 
 ```markdown
 # CODEMAP (Level 1 - Names Only)
@@ -137,12 +150,12 @@ src/
 └── config/
     └── *.json (3 files)
 
-## src/main.rs
+## src/main.rs (42 lines)
 - `Config` (struct)
-- `main` :1
+1 | `main`
   In `Config`:
-    - `new` :5
-    - `validate` :12
+    5 | `new`
+    12 | `validate`
 ```
 
 ### L2 — Full Signatures
@@ -161,12 +174,12 @@ src/
 └── config/
     └── *.json (3 files)
 
-## src/main.rs
+## src/main.rs (42 lines)
 - `Config` (struct)
-  - `main()` :1
+1 | `main()`
   In `Config`:
-    - `new(name: String) -> Config` :5
-    - `validate(&self) -> bool` :12
+    5 | `new(name: String) -> Config`
+    12 | `validate(&self) -> bool`
 ```
 
 ### Output Rules
@@ -174,6 +187,7 @@ src/
 - Files with no extractable items are omitted from output
 - File paths are relative to the scanned root
 - Paths use forward slashes regardless of OS
+- File sections include the total number of lines in the file
 - Items within a file are listed in source order
 - Files are sorted alphabetically by path
 - A UTC timestamp is included in the header
@@ -303,5 +317,5 @@ Generated files are placed directly in `docs/`:
 
 | File | Contents |
 |---|---|
-| `docs/CODEMAP.L1.md` | Compact index — names and line numbers |
-| `docs/CODEMAP.L2.md` | Detailed index — full signatures with parameters and return types |
+| `docs/CODEMAP.L1.md` | Compact index — line-first names and line numbers |
+| `docs/CODEMAP.L2.md` | Detailed index — line-first full signatures with parameters and return types |

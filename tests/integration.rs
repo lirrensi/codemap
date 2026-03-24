@@ -1,3 +1,8 @@
+//! FILE: tests/integration.rs
+//! PURPOSE: Verify parser extraction and renderer output across fixtures.
+//! OWNS: Integration coverage for language dispatch, extraction, and rendering.
+//! DOCS: README.md, docs/product.md, src/renderer.rs
+
 use codemap::parser;
 use codemap::renderer;
 use codemap::types::{Extractable, TypeKind};
@@ -119,11 +124,16 @@ fn test_renderer_output_format() {
     ];
     files.insert(PathBuf::from("/root/src/main.rs"), items);
 
-    let (l1_output, l2_output) = renderer::render(Path::new("/root"), &files, "");
+    let mut line_counts = BTreeMap::new();
+    line_counts.insert(PathBuf::from("/root/src/main.rs"), 42);
+
+    let (l1_output, l2_output) = renderer::render(Path::new("/root"), &files, &line_counts, "");
     assert!(l2_output.contains("_generated:"));
-    assert!(l2_output.contains("## src/main.rs"));
+    assert!(l2_output.contains("## src/main.rs (42 lines)"));
+    assert!(l2_output.contains("## How to Read This"));
     assert!(l2_output.contains("`Config` (struct)"));
-    assert!(l2_output.contains("`add(a: i32, b: i32) -> i32` :10"));
+    assert!(l2_output.contains("10 | `add(a: i32, b: i32) -> i32`"));
+    assert!(l1_output.contains("10 | `add`"));
 }
 
 #[test]
@@ -141,8 +151,11 @@ fn test_renderer_skips_empty_files() {
         })],
     );
 
-    let (_, l2_output) = renderer::render(Path::new("/root"), &files, "");
-    assert!(l2_output.contains("## main.rs"));
+    let mut line_counts = BTreeMap::new();
+    line_counts.insert(PathBuf::from("/root/main.rs"), 1);
+
+    let (_, l2_output) = renderer::render(Path::new("/root"), &files, &line_counts, "");
+    assert!(l2_output.contains("## main.rs (1 line)"));
     assert!(!l2_output.contains("empty.rs"));
 }
 
@@ -594,6 +607,7 @@ fn e2e_function_line_numbers() {
 fn e2e_renderer_all_fixtures() {
     let fixtures_dir = Path::new("tests/fixtures");
     let mut files = BTreeMap::new();
+    let mut line_counts = BTreeMap::new();
 
     for entry in fs::read_dir(fixtures_dir).unwrap() {
         let entry = entry.unwrap();
@@ -602,6 +616,7 @@ fn e2e_renderer_all_fixtures() {
             let source = fs::read_to_string(&path).unwrap();
             if let Some(items) = parser::extract_from_file(&path, &source) {
                 if !items.is_empty() {
+                    line_counts.insert(path.clone(), source.lines().count());
                     files.insert(path, items);
                 }
             }
@@ -610,7 +625,7 @@ fn e2e_renderer_all_fixtures() {
 
     assert!(!files.is_empty(), "should have parsed at least one fixture");
 
-    let (_, output) = renderer::render(fixtures_dir, &files, "");
+    let (_, output) = renderer::render(fixtures_dir, &files, &line_counts, "");
     assert!(output.contains("# CODEMAP"), "should have header");
     assert!(output.contains("_generated:"), "should have timestamp");
 

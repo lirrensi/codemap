@@ -1,3 +1,9 @@
+//! FILE: src/onboard.rs
+//! PURPOSE: Guide repo onboarding and AGENTS.md text for codemap setup.
+//! OWNS: Interactive setup prompts and suggested AGENTS.md content.
+//! EXPORTS: run_onboard()
+//! DOCS: README.md, docs/product.md
+
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -27,8 +33,8 @@ const HOOK_ENTRY: &str = r#"
 
 const DEFAULT_AGENTS_SECTION: &str = "## Code Map\n\
 `docs/` contains the codebase map\n\
-- `docs/CODEMAP.L1.md` — Compact index (names and line numbers)\n\
-- `docs/CODEMAP.L2.md` — Detailed index (full signatures with parameters and return types)\n\
+- `docs/CODEMAP.L1.md` — Compact index (line-first names and line numbers)\n\
+- `docs/CODEMAP.L2.md` — Detailed index (line-first full signatures with parameters and return types)\n\
 \n\
 You may read entire L1 file as a quick reference.\n\
 L2 file may be big - prefer using `rg` or partial reads to refer to specific files/modules.\n";
